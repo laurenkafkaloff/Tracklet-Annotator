@@ -1,2 +1,1 @@
 # TGIA-Annotator
-# TGIA-Annotator
