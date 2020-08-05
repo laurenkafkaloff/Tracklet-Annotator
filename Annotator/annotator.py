@@ -46,7 +46,7 @@ class Annotator():
 		self.rect = None
 		self.minBoxSize = 10
 		self.curr_box = {"x1":0, "y1":0, "x2":0, "y2":0}
-		self.curr_id = 0
+		self.curr_id = 1
 		self.saveBox = None
 		self.topLevelOpen = False
 		self.boxes = {}
@@ -128,6 +128,7 @@ class Annotator():
 		self.frm_editor.grid(sticky=N+W, row=0, column=0)
 
 		# identities panel
+
 
 		# checkboxes
 
@@ -224,10 +225,9 @@ class Annotator():
 			if abs(event.x - self.curr_box['x1']) < self.minBoxSize or abs(event.y - self.curr_box['y1']) < self.minBoxSize:
 				self.cvs_image.delete(self.rect)
 			elif not self.topLevelOpen:
-				if self.saveOrCancel(event):
-					self.curr_box['x2'], self.curr_box['y2'] = event.x, event.y
-					self.curr_box['id'] = self.curr_id
-					# self.curr.addBox(self.curr_box)
+				self.curr_box['x2'], self.curr_box['y2'] = event.x, event.y
+				self.curr_box['id'] = self.curr_id
+				self.saveOrCancel(event)
 		if self.btn_editAndSave['text'] == "Close Editor & Save":
 			self.drawing = True
 
@@ -245,7 +245,7 @@ class Annotator():
 
 		# Features
 		self.win.title('New bounding box')
-		message = "coords / identity"
+		message = "Coords: " + str(self.cvs_image.coords(self.rect)) + "    ID: "
 		Label(self.win, text=message).grid(row=0, column=0, columnspan=23, sticky=W+E)
 		Button(self.win, text='Cancel', command=self.btn_cancel).grid(row=1, column=0)
 		Button(self.win, text='Confirm', command=self.btn_confirm).grid(row=1, column=1)
@@ -256,13 +256,13 @@ class Annotator():
 
 	def btn_cancel(self):
 		self.cvs_image.delete(self.rect)
-		self.saveBox = False
 		self.rect = None
 		self.win.destroy()
 		self.topLevelOpen = False
 
 	def btn_confirm(self):
-		self.saveBox = True
+		#print(str(self.frames.get(self.curr.frameNum) is None))
+		self.frames[self.curr.frameNum] = self.allInstances[str(self.curr_id)].updateBoxes(self.curr_box, self.curr)
 		self.win.destroy()
 		self.topLevelOpen = False
 
@@ -335,7 +335,9 @@ class Annotator():
 				self.f = Frame(frameNum=self.tempCount, img=self.img)
 				self.frames.append(self.f)
 			else:
-				self.frames[self.tempCount].img = self.img
+				self.f = self.frames[self.tempCount]
+				self.f.img = self.img
+			self.loadNewBoxes()
 		else: # finished loading
 			self.stopEvent.set()
 			self.filling = False
@@ -377,7 +379,7 @@ class Annotator():
 
 			# add box to an existing instance's list of boxes
 			print(str(self.allInstances.get(a_id)))
-			self.allInstances[a_id].updateBoxes(box, a_frame)
+			self.allInstances[a_id].updateBoxes(box, self.frames[a_frame])
 		for frame in self.frames:
 			if not frame is None:
 				for i in frame.instances:
@@ -398,20 +400,22 @@ class Annotator():
 	# PLAYING VIDEO
 	# CASE: Check if there's a vid
 	def loadNewBoxes(self):
-		instances = self.curr.instances # [ id ]
-		print("balala: " + str(instances))
-		for id in instances:
-			print("here")
+		instances = self.f.instances # { id: none }
+		for id in instances.keys():
 			instance = self.allInstances[id]
-			box = instance.boxes[self.curr.frameNum] # for each instance on the frame, get its corresponding box
-			self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(instance.color), width=2)
+			box = instance.boxes[self.tempCount] # for each instance on the frame, get its corresponding box
+			box['color'] = instance.color
+			self.f.addInstance(id, box)  # store box onto frame so you don't have to retreive it again
 
 	def loadNewFrame(self):
 		if not self.displayedImage is None:
 			self.cvs_image.delete(self.displayedImage)
 		self.displayedImage = self.cvs_image.create_image(0, 0, anchor="nw", image=self.curr.img) # load new image
 		self.lbl_frameNum.config(text="Frame Number: " + str(self.curr.frameNum)) # load new frame number
-		self.loadNewBoxes()
+		for id in self.curr.instances.keys():
+			box = self.curr.instances[id]
+			self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(box['color']), width=2)
+		# NOTE: loadnewboxes when saving images and store boxes to frame; when identities are swapped, note them as a seperate set of
 
 	def next(self):
 		if not self.playing:

@@ -1,7 +1,8 @@
+from Annotator.frame import Frame
 
 class Instance(object):
 
-	def __init__(self, id=None, color=None):
+	def __init__(self, id=None, color="white"):
 		self.id = id
 		self.color = color
 		self.boxes = {} # { framenum: box }
@@ -9,11 +10,14 @@ class Instance(object):
 		# box = {x1, y1, x2, y2}
 
 
-	def updateBoxes(self, box, frameNum):
+	def updateBoxes(self, box, frame):
 		# don't forget to add instance to frame obj if new box
-		self.boxes[frameNum] = self.cleanBox(box)
-		if frameNum > self.maxFrame:
-			self.maxFrame = frameNum
+		self.boxes[frame.frameNum] = self.cleanBox(box)
+		if frame.frameNum > self.maxFrame:
+			self.maxFrame = frame.frameNum
+		box['color'] = self.color
+		frame.addInstance(self.id, box)
+		return frame
 
 	def updateId(self, newId, frameNum, oldFrames):
 		newFrames = oldFrames
