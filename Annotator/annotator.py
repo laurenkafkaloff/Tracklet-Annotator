@@ -37,7 +37,7 @@ class Annotator():
 		self.edited = False
 		self.rect = None
 		self.minBoxSize = 10
-		self.curr_box = {"x1":0, "y1":0, "x2":0, "y2":0, "id":None}
+		self.curr_box = {"x1":0, "y1":0, "x2":0, "y2":0}
 		self.curr_id = 0
 		self.saveBox = None
 		self.topLevelOpen = False
@@ -95,7 +95,7 @@ class Annotator():
 
 		# checkboxes
 			# Show Prev Frame Boxes -- checkbox (swaps to "hide")
-			# Show Next Frame Boxes -- checkbox (swaps to "hide") -- maybe don't add this
+			# Show Next Frame Boxes -- checkbox (swaps to "hide") -- need in case bird enters frame but isn't detected immediately
 
 		# On next or finish drawing -- error if any boxes share an id, confirm boxes and curr.commitEdits
 
@@ -104,12 +104,12 @@ class Annotator():
 		self.btn_editAndSave = tk.Button(master=self.frm_editor, text="Close Editor & Save", command=self.editAndSave, width=15)
 		self.btn_newBox = tk.Button(master=self.frm_editor, text="Create new box", command=self.newBox)
 		self.btn_redrawBox = tk.Button(master=self.frm_editor, text="Redraw box", command=self.redrawBox)
-		self.btn_changeId = tk.Button(master=self.frm_editor, text="Change box ID", command=self.changeId)
+		self.btn_swapId = tk.Button(master=self.frm_editor, text="Change box ID", command=self.swapId)
 		self.btn_editAndSave.grid(sticky=N+W, row=0, column=0)
 		# in editAndSave()
 		# self.btn_newBox.grid(row=1, column=0)
 		# self.btn_redrawBox.grid(row=2, column=0)
-		# self.btn_changeId.grid(row=3, column=0)
+		# self.btn_swapId.grid(row=3, column=0)
 		self.editAndSave()
 		self.frm_editor.grid(sticky=N+W, row=0, column=0)
 
@@ -165,7 +165,7 @@ class Annotator():
 		# erase selectBox() but store its id 
 		# pendown()
 
-	def changeId(self):
+	def swapId(self):
 		pass
 		# selectBox()
 		# selectId()
@@ -176,12 +176,12 @@ class Annotator():
 		if self.btn_editAndSave['text'] == "Open Editor":
 			self.btn_newBox.grid(sticky=N+W, row=1, column=0)
 			self.btn_redrawBox.grid(sticky=N+W,row=2, column=0)
-			self.btn_changeId.grid(sticky=N+W, row=3, column=0)
+			self.btn_swapId.grid(sticky=N+W, row=3, column=0)
 			self.btn_editAndSave.config(text="Close Editor & Save")
 		else:
 			self.btn_newBox.grid_forget()
 			self.btn_redrawBox.grid_forget()
-			self.btn_changeId.grid_forget()
+			self.btn_swapId.grid_forget()
 			self.btn_editAndSave.config(text="Open Editor")
 
 	def penDown(self):
@@ -193,7 +193,7 @@ class Annotator():
 	def click(self, event):
 		# select id first (or say new bird)
 		if self.drawing:
-			self.curr_box = {"x1":0, "y1":0, "x2":0, "y2":0, "id":None}
+			self.curr_box = {"x1":0, "y1":0, "x2":0, "y2":0}
 			self.curr_box['x1'], self.curr_box['y1'] = event.x, event.y
 			self.rect = self.cvs_image.create_rectangle(event.x, event.y, event.x, event.y, outline=self.idColors[self.curr_id], width=2)
 	
@@ -297,7 +297,6 @@ class Annotator():
 		if self.displayedImage != None:
 			self.cvs_image.delete(self.displayedImage)
 		self.displayedImage = self.cvs_image.create_image(0, 0, anchor="nw", image=self.curr.img)
-		self.boxes = self.curr.boxes
 
 	def next(self):
 		if not self.playing:
@@ -378,21 +377,15 @@ class Annotator():
 		
 	# TEXT FILES
 	def fillFrames(self):
+		# each frame stores which identities are on its frame
+		# each identity stores its box on each frame
 		file = open("/Users/laurenkafkaloff/Desktop/TestData.txt","r") 
 		for line in file:
-			string = line
-			ind = 0
-			for char in string:
-				if char is ',':
-					break
-				ind += 1
-			frameNum = int(string[0: int(ind)])
-			print(frameNum)
+			#frameNum = int(string[0: int(ind)])
+			print(line)
 
-			# if id = -1
-			# incr count and set id to negative that number
-			# all negative numbers = white
 
+		# LOAD A SPECIFIED NUMBER OF FRAMES AHEAD OF TIME, WHEN SWAPPINNG IDS, DON'T LOAD PAST THIS EITHER
 
 
 
