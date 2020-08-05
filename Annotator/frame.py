@@ -33,7 +33,7 @@ class Frame(object):
 		else: 
 			newy1, newy2 = box['y1'], box['y2']
 
-		self.instances[id] = {"x1":newx1, "y1":newy1, "x2":newx2, "y2":newy2, "id":box['id']}
+		self.instances[id] = {"x1":newx1, "y1":newy1, "x2":newx2, "y2":newy2}
 
 	def swapBoxes(self, box1, box2):
 		# add new tuple with box and identity
