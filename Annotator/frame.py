@@ -5,11 +5,11 @@ class Frame(object):
 		self.frameNum = frameNum
 		self.img = img
 		self.instances = {}
+		# { id: box }
 
 		# self.fillBoxes()
 
 
-		# boxes = { id: box }
 		# box = {x1, y1, x2, y2}
 
 	def fillBoxes(self):

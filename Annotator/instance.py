@@ -19,10 +19,10 @@ class Instance(object):
 		newFrames = oldFrames
 		for key in self.boxes:
 			if int(key) >= frameNum:
-				workingFrame = oldFrames[key] # frame
+				workingFrame = oldFrames[int(key)] # frame
 				workingFrame.instances[prevId] = self.boxes[key]
 				workingFrame.instances.pop(self.id)
-				newFrames[key] = workingFrame
+				newFrames[int(key)] = workingFrame
 		return newFrames
 
 
@@ -36,24 +36,24 @@ class Instance(object):
 			else:
 				b[key] = self.boxes[key]
 				if self.maxFrame >= bird2.maxFrame: 
-					workingFrame = oldFrames[key] # frame
+					workingFrame = oldFrames[int(key)] # frame
 					bbox = workingFrame.instances.get(bird2.id) # box for an instance
 					workingFrame.instances[bird2.id] = self.boxes[key]
 					if not bbox is None: # this frame, in addition to a, showed b
 						workingFrame.instances[self.id] = bird2.boxes[key]
-					newFrames[key] = workingFrame
+					newFrames[int(key)] = workingFrame
 		for key in bird2.boxes:
 			if int(key) < frameNum:
 				b[key] = bird2.boxes[key]
 			else:
 				a[key] = bird2.boxes[key]
 				if bird2.maxFrame > self.maxFrame and key <= self.maxFrame:
-					workingFrame = oldFrames[key]
+					workingFrame = oldFrames[int(key)]
 					abox = workingFrame.instances.get(self.id) 
 					workingFrame.instances[self.id] = bird2.boxes[key]
 					if not abox is None: # this frame, in addition to b, showed a
 						workingFrame.instances[bird2.id] = self.boxes[key]
-					newFrames[key] = workingFrame
+					newFrames[int(key)] = workingFrame
 		self.boxes = a
 		bird2.boxes = b
 

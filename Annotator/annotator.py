@@ -1,7 +1,7 @@
 import tkinter as tk
-from tkinter import *  
+from tkinter import *
 from tkinter import filedialog, simpledialog
-from PIL import ImageTk,Image  
+from PIL import ImageTk,Image
 import time
 import threading
 
@@ -13,6 +13,7 @@ class Annotator():
 	# TODO: open folder instead of video so you can store original file and new file
 	# TODO: export environment into github
 	# TODO: hover over box edge to show identity -- increase box width
+	# TODO: opening a second video
 
 	def __init__(self):
 	# Instance Variables
@@ -23,12 +24,16 @@ class Annotator():
 		self.leftPanelHeight_Row1 = 100
 		self.leftPanelHeight_Row2 = 50
 
+		# FILLING VIDEO
+		self.filling = False
+		self.tempCount = 0
+
 		# PLAYING VIDEO
 		self.video = None
 		self.stopEvent = threading.Event()
 		self.playing = False
-		self.frames = [None]
-		self.curr = Frame(frameNum=0) #, img=None, boxes=None)
+		self.frames = [Frame(frameNum=0)] #TODO: ADDING FRAME 1 TWICE?
+		self.curr = None #Frame(frameNum=0) #, img=None, boxes=None)
 		self.displayedImage = None
 
 		# BOUNDING BOXES
@@ -47,11 +52,11 @@ class Annotator():
 
 		# TEXT FILES
 		self.frameswithboxes = []
-		self.fillFrames()
+		self.fillFiles()
 
 	# Display
 		# WINDOW
-		self.window = Tk()  
+		self.window = Tk()
 		self.window.title("Annotator")
 		self.canvas = Canvas(master=self.window, width=self.width, height=self.height, relief=SUNKEN)
 		self.window.minsize(self.width, self.height)
@@ -75,7 +80,7 @@ class Annotator():
 		self.lbl_frameNum.grid(row=0, column=5)
 		self.frm_toolbar.grid(row=1, column=0)
 
-		# Main Elements 
+		# Main Elements
 		# 		       Header
 		#		      Tool Bar
 		#            Main Frame
@@ -139,7 +144,7 @@ class Annotator():
 		self.window.bind('<Right>', self.rightkey)
 
 		# BOUNDING BOXES
-		# TODO: add undo button			
+		# TODO: add undo button
 		self.window.bind('<Escape>', self.key_esc)
 		self.cvs_image.bind("<ButtonPress-1>", self.click)
 		self.cvs_image.bind("<B1-Motion>", self.drag)
@@ -165,7 +170,7 @@ class Annotator():
 
 	def redrawBox(self):
 		pass
-		# erase selectBox() but store its id 
+		# erase selectBox() but store its id
 		# pendown()
 
 	def changeId(self):
@@ -199,11 +204,11 @@ class Annotator():
 			self.curr_box = {"x1":0, "y1":0, "x2":0, "y2":0}
 			self.curr_box['x1'], self.curr_box['y1'] = event.x, event.y
 			self.rect = self.cvs_image.create_rectangle(event.x, event.y, event.x, event.y, outline="white", width=2)
-	
+
 	def drag(self, event):
 		if self.drawing:
 			self.cvs_image.coords(self.rect, self.curr_box['x1'], self.curr_box['y1'], event.x, event.y)
-		
+
 	def release(self, event):
 		if self.drawing:
 			if abs(event.x - self.curr_box['x1']) < self.minBoxSize or abs(event.y - self.curr_box['y1']) < self.minBoxSize:
@@ -274,15 +279,18 @@ class Annotator():
 
 	# OPENING VIDEO
 	def openDir(self):
+		self.fillFiles()
 		fileTypes =  [('Videos', '*.mp4')]
 		filename = tk.filedialog.askopenfilename(title = "Select file",filetypes = fileTypes)
 		self.openVideo(filename)
 
+
 	def openVideo(self, filename):
 		self.video = cv2.VideoCapture(filename)
 		self.lbl_header.config(text=filename)
+		self.filling = True
 		self.start()
-		self.stop()
+		# self.stop()
 
 		self.window.update()
 
@@ -297,9 +305,10 @@ class Annotator():
 	# PLAYING VIDEO
 	# TODO check if there's a vid
 	def newFrame(self):
-		if self.displayedImage != None:
+		if not self.displayedImage is None:
 			self.cvs_image.delete(self.displayedImage)
 		self.displayedImage = self.cvs_image.create_image(0, 0, anchor="nw", image=self.curr.img)
+		self.lbl_frameNum.config(text="Frame Number: " + str(self.curr.frameNum))
 
 	def next(self):
 		if not self.playing:
@@ -309,20 +318,26 @@ class Annotator():
 			commitEdits()
 
 		if self.curr.frameNum == len(self.frames) - 1:
-			more, freeze = self.video.read()
-			if more:
-				self.img = self.frameToImage(freeze)
-				self.curr = Frame(frameNum=self.curr.frameNum + 1, img=self.img)
-				self.frames.append(self.curr)
-				self.lbl_frameNum.config(text="Frame Number: " + str(self.curr.frameNum))
-				self.newFrame()
-			else:
-				print("video's over")
-		else:
-			self.curr = self.frames[self.curr.frameNum + 1] 
-			self.lbl_frameNum.config(text="Frame Number: " + str(self.curr.frameNum))
-			self.newFrame()
-			time.sleep(.1) # could make fps but this matches avg load time of a new/unloaded frame
+			print("last frame - shouldn't be able to go past this")
+
+		self.curr = self.frames[self.curr.frameNum + 1]
+		print("loading frame: " + str(self.curr.frameNum))
+		#self.lbl_frameNum.config(text="Frame Number: " + str(self.curr.frameNum))  # in newFrame
+		self.newFrame()
+		time.sleep(.1) # TODO: fps?
+
+		# this case shouldn't happen anymore
+		# else:
+		# 	more, freeze = self.video.read()
+		# 	if more:
+		# 		self.img = self.frameToImage(freeze)
+		# 		self.curr = Frame(frameNum=self.curr.frameNum + 1, img=self.img)
+		# 		self.frames.append(self.curr)
+		# 		self.lbl_frameNum.config(text="Frame Number: " + str(self.curr.frameNum))
+		# 		self.newFrame()
+		# 	else:
+		# 		print("video's over")
+
 
 	def prev(self):
 		if not self.playing:
@@ -333,12 +348,10 @@ class Annotator():
 
 		if self.curr.frameNum > 1:
 			self.curr = self.frames[self.curr.frameNum - 1]
-			self.lbl_frameNum.config(text="Frame Number: " + str(self.curr.frameNum))
 			self.newFrame()
 
 	def start(self):
-		if self.video != None: 
-			self.playing = True
+		if not self.video is None:
 			self.stopEvent.clear()
 			self.thread = threading.Thread(target=self.videoLoop, args=())
 			self.thread.start()
@@ -353,15 +366,39 @@ class Annotator():
 	def videoLoop(self):
 		try:
 			while not self.stopEvent.is_set():
-				self.next()
+				if self.filling:
+					self.fillVideoNext()
+				else:
+					self.playing = True
+					self.next()
 
 		except RuntimeError as e:
 			print("[INFO] caught a RuntimeError")
 
+	def fillVideoNext(self):
+		more, freeze = self.video.read()
+		self.tempCount += 1
+		if more:
+			img = self.frameToImage(freeze)
+			if self.tempCount >= len(self.frames): # file included no lines of instances on this frame
+				curr = Frame(frameNum=self.tempCount, img=img)
+				print("filled frame: " + str(curr.frameNum))
+				self.frames.append(curr)
+			else:
+				self.frames[self.tempCount].img = img
+		else: # finished loading
+			self.stopEvent.set()
+			self.filling = False
+			self.curr = self.frames[1]
+			for i in self.frames:
+				print(str(i.frameNum))
+			self.newFrame()
+
+
 	def commitEdits(self):
 		pass
 		# self.curr.commit() -- update self.curr.boxes to include the new boxes and identities
-		# self.frames[self.curr.frameNum - 1] = self.curr 
+		# self.frames[self.curr.frameNum - 1] = self.curr
 		# self.edited = False
 
 	def btn_next(self):
@@ -377,15 +414,15 @@ class Annotator():
 	def onClose(self):
 		# TODO save everything before closing
 		self.stop()
-		
+
 	# TEXT FILES
-	def fillFrames(self):
+	def fillFiles(self):
 		frm_index = 0
 		id_index = 1
 		box_index = 2
 		# each frame stores which identities are on its frame
 		# each identity stores its box on each frame
-		file = open("/Users/laurenkafkaloff/Desktop/TestData.txt","r") 
+		file = open("/Users/laurenkafkaloff/Desktop/TestData.txt","r")
 		for line in file:
 			# 1, 3, 794.27, 247.59, 71.245, 174.88, -1, -1, -1, -1
 			textArray = line.split(",")
@@ -399,7 +436,7 @@ class Annotator():
 
 			box =  {"x1":x1, "y1":y1, "x2":x2, "y2":y2}
 			self.frames[a_frame].addInstance(textArray[id_index], box)
-			print(str(a_frame) + ":  " + str(textArray[id_index]) + "= " + x1 + " " + y1)
+			# print(str(a_frame) + ":  " + str(textArray[id_index]) + "= " + x1 + " " + y1)
 		for frame in self.frames:
 			if not frame is None:
 				for i in frame.instances.keys():
@@ -410,6 +447,7 @@ class Annotator():
 		# go back through and put all the images into the frames with a "show = false"
 
 
-
-
-
+		# NEXT STEP: DRAW THE BOXES
+			# run fillFiles()
+			# run img into frames (or it'll just get overwritten in videoloop)
+			# draw rects onto frame when next()
