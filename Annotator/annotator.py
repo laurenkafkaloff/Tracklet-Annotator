@@ -6,19 +6,21 @@ import time
 import threading
 
 from Annotator.frame import Frame
+from Annotator.instance import Instance
 import cv2
 
 
 class Annotator():
-	# TODO: open folder instead of video so you can store original file and new file
-	# TODO: export environment into github
-	# TODO: hover over box edge to show identity -- increase box width
-	# TODO: opening a second video
+	# TODO: Open folder instead of video so you can store original file and new file
+	# NOTE: Export environment into github
+	# CASE: Opening a second video
 
 	def __init__(self):
 	# Instance Variables
 		# DISPLAY
-		self.width, self.height = 960, 600
+		self.width, self.height = 960, 600 # width overwritten by screensize
+		self.border = 10
+		self.top_two_bars = 45
 		self.leftPanelWidth = 200
 		self.leftPanelHeight_Row0 = 200
 		self.leftPanelHeight_Row1 = 100
@@ -27,12 +29,13 @@ class Annotator():
 		# FILLING VIDEO
 		self.filling = False
 		self.tempCount = 0
+		self.fileProg = 0
 
 		# PLAYING VIDEO
 		self.video = None
 		self.stopEvent = threading.Event()
 		self.playing = False
-		self.frames = [Frame(frameNum=0)] #TODO: ADDING FRAME 1 TWICE?
+		self.frames = [Frame(frameNum=0)]
 		self.curr = None #Frame(frameNum=0) #, img=None, boxes=None)
 		self.displayedImage = None
 
@@ -49,15 +52,19 @@ class Annotator():
 		self.boxes = {}
 
 		# INSTANCES
+		self.allInstances = {} # { id : instance }
 
 		# TEXT FILES
 		self.frameswithboxes = []
-		self.fillFiles()
 
 	# Display
 		# WINDOW
 		self.window = Tk()
 		self.window.title("Annotator")
+		width = self.window.winfo_screenwidth()
+		self.width = width
+		self.img_width = width - self.leftPanelWidth - self.border # border on right = 10
+
 		self.canvas = Canvas(master=self.window, width=self.width, height=self.height, relief=SUNKEN)
 		self.window.minsize(self.width, self.height)
 
@@ -144,14 +151,17 @@ class Annotator():
 		self.window.bind('<Right>', self.rightkey)
 
 		# BOUNDING BOXES
-		# TODO: add undo button
+		# NOTE: Add undo button binding
 		self.window.bind('<Escape>', self.key_esc)
 		self.cvs_image.bind("<ButtonPress-1>", self.click)
 		self.cvs_image.bind("<B1-Motion>", self.drag)
 		self.cvs_image.bind("<ButtonRelease-1>", self.release)
 
 	# Show
-		self.showElements()
+		self.lbl_header.grid(row=0, column=0)
+		self.frm_toolbar.grid(row=1, column=0)
+		self.frm_main.grid(row=2, column=0)
+		self.canvas.grid_columnconfigure(0, weight=1)
 		self.canvas.pack()
 		self.window.mainloop()
 
@@ -266,11 +276,6 @@ class Annotator():
 
 
 	# DISPLAY
-	def showElements(self):
-		self.lbl_header.grid(row=0, column=0)
-		self.frm_toolbar.grid(row=1, column=0)
-		self.frm_main.grid(row=2, column=0)
-
 	def leftkey(self, event):
 		self.prev()
 
@@ -279,36 +284,134 @@ class Annotator():
 
 	# OPENING VIDEO
 	def openDir(self):
-		self.fillFiles()
 		fileTypes =  [('Videos', '*.mp4')]
 		filename = tk.filedialog.askopenfilename(title = "Select file",filetypes = fileTypes)
 		self.openVideo(filename)
 
-
 	def openVideo(self, filename):
 		self.video = cv2.VideoCapture(filename)
 		self.lbl_header.config(text=filename)
+		self.setDimsAndMultipliers()
 		self.filling = True
+		self.fillFiles()
 		self.start()
-		# self.stop()
 
 		self.window.update()
+
+	def setDimsAndMultipliers(self):
+		# set dimensions
+		self.ori_height = self.video.get(cv2.CAP_PROP_FRAME_HEIGHT)
+		self.ori_width = self.video.get(cv2.CAP_PROP_FRAME_WIDTH)
+		self.img_height = int(self.img_width/self.ori_width*self.ori_height)
+		self.cvs_image.config(height=self.img_height)
+		self.canvas.config(height=self.img_height + self.top_two_bars + self.border)
+		self.window.minsize(self.width, self.img_height + self.top_two_bars + self.border)
+
+		# find box multipliers
+		self.boxMult = self.img_width / self.ori_width
+
+	def videoLoop(self):
+		try:
+			while not self.stopEvent.is_set():
+				if self.filling:
+					self.fillVideoNext()
+					# TODO: Load file (with progress) before video
+					# if self.fileProg != 100:
+					# 	print (self.fileProg)
+					# else:
+					# 	self.fillVideoNext()
+				else:
+					self.playing = True
+					self.next()
+		except RuntimeError as e:
+			print("[INFO] caught a RuntimeError")
+
+	def fillVideoNext(self):
+		more, freeze = self.video.read()
+		self.tempCount += 1
+		if more:
+			self.img = self.frameToImage(freeze)
+			if self.tempCount >= len(self.frames): # file included no lines of instances on this frame
+				self.f = Frame(frameNum=self.tempCount, img=self.img)
+				self.frames.append(self.f)
+			else:
+				self.frames[self.tempCount].img = self.img
+		else: # finished loading
+			self.stopEvent.set()
+			self.filling = False
+			self.curr = self.frames[1]
+			self.loadNewFrame()
+
+	def fillFiles(self):
+		frm_index = 0
+		id_index = 1
+		box_index = 2
+		# each frame stores which identities are on its frame
+		# each identity stores its box on each frame
+		file = open("/Users/laurenkafkaloff/Desktop/TestData.txt","r")
+		for line in file:
+			# 1, 3, 794.27, 247.59, 71.245, 174.88, -1, -1, -1, -1
+			textArray = line.split(",")
+			a_frame = int(textArray[frm_index])
+			a_id = str(textArray[id_index])
+
+			# add frame if it doesn't exist yet
+			print(str(a_frame) + " " + str(len(self.frames)))
+			if a_frame == len(self.frames):
+				print("new frame: " + str(a_frame))
+				self.frames.append(Frame(frameNum=a_frame))
+
+			x1 = float(textArray[box_index]) * self.boxMult # accounts for image resizing
+			y1 = float(textArray[box_index + 1]) * self.boxMult
+			x2 = x1 + float(textArray[box_index + 2]) * self.boxMult
+			y2 = y1 + float(textArray[box_index + 3]) * self.boxMult
+			box =  {"x1":x1, "y1":y1, "x2":x2, "y2":y2}
+
+			# add instance id to list in frame
+			self.frames[a_frame].addInstance(a_id)
+
+			# add new instance if this is its first frame/box
+			if self.allInstances.get(a_id) is None:
+				self.i = Instance(a_id, "white")
+				self.allInstances[a_id] = self.i
+
+			# add box to an existing instance's list of boxes
+			print(str(self.allInstances.get(a_id)))
+			self.allInstances[a_id].updateBoxes(box, a_frame)
+		for frame in self.frames:
+			if not frame is None:
+				for i in frame.instances:
+					pass
+					#print(str(i) + ": " + str(frame.instances[i]))
 
 	def frameToImage(self, freeze):
 		rgb = cv2.cvtColor(freeze, cv2.COLOR_BGR2RGB)
 		img = Image.fromarray(rgb)
-		width = int(self.height/img.height*img.width)
-		imgResized = img.resize((width, self.height), Image.NEAREST)
+		# self.img_height = int(self.img_width/img.width*img.height)
+		# self.cvs_image.config(height=self.img_height)
+		# self.canvas.config(height=self.img_height + self.top_two_bars + self.border)
+		# self.window.minsize(self.width, height + self.top_two_bars + self.border)
+		imgResized = img.resize((self.img_width, self.img_height), Image.NEAREST)
 		return ImageTk.PhotoImage(imgResized)
 
 
 	# PLAYING VIDEO
-	# TODO check if there's a vid
-	def newFrame(self):
+	# CASE: Check if there's a vid
+	def loadNewBoxes(self):
+		instances = self.curr.instances # [ id ]
+		print("balala: " + str(instances))
+		for id in instances:
+			print("here")
+			instance = self.allInstances[id]
+			box = instance.boxes[self.curr.frameNum] # for each instance on the frame, get its corresponding box
+			self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(instance.color), width=2)
+
+	def loadNewFrame(self):
 		if not self.displayedImage is None:
 			self.cvs_image.delete(self.displayedImage)
-		self.displayedImage = self.cvs_image.create_image(0, 0, anchor="nw", image=self.curr.img)
-		self.lbl_frameNum.config(text="Frame Number: " + str(self.curr.frameNum))
+		self.displayedImage = self.cvs_image.create_image(0, 0, anchor="nw", image=self.curr.img) # load new image
+		self.lbl_frameNum.config(text="Frame Number: " + str(self.curr.frameNum)) # load new frame number
+		self.loadNewBoxes()
 
 	def next(self):
 		if not self.playing:
@@ -318,13 +421,12 @@ class Annotator():
 			commitEdits()
 
 		if self.curr.frameNum == len(self.frames) - 1:
-			print("last frame - shouldn't be able to go past this")
+			return
 
 		self.curr = self.frames[self.curr.frameNum + 1]
-		print("loading frame: " + str(self.curr.frameNum))
-		#self.lbl_frameNum.config(text="Frame Number: " + str(self.curr.frameNum))  # in newFrame
-		self.newFrame()
-		time.sleep(.1) # TODO: fps?
+		#self.lbl_frameNum.config(text="Frame Number: " + str(self.curr.frameNum))  # in loadNewFrame
+		self.loadNewFrame()
+		time.sleep(.1) # NOTE: Change sleep into fps
 
 		# this case shouldn't happen anymore
 		# else:
@@ -334,7 +436,7 @@ class Annotator():
 		# 		self.curr = Frame(frameNum=self.curr.frameNum + 1, img=self.img)
 		# 		self.frames.append(self.curr)
 		# 		self.lbl_frameNum.config(text="Frame Number: " + str(self.curr.frameNum))
-		# 		self.newFrame()
+		# 		self.loadNewFrame()
 		# 	else:
 		# 		print("video's over")
 
@@ -348,7 +450,7 @@ class Annotator():
 
 		if self.curr.frameNum > 1:
 			self.curr = self.frames[self.curr.frameNum - 1]
-			self.newFrame()
+			self.loadNewFrame()
 
 	def start(self):
 		if not self.video is None:
@@ -362,38 +464,6 @@ class Annotator():
 	def stop(self):
 		self.playing = False
 		self.stopEvent.set()
-
-	def videoLoop(self):
-		try:
-			while not self.stopEvent.is_set():
-				if self.filling:
-					self.fillVideoNext()
-				else:
-					self.playing = True
-					self.next()
-
-		except RuntimeError as e:
-			print("[INFO] caught a RuntimeError")
-
-	def fillVideoNext(self):
-		more, freeze = self.video.read()
-		self.tempCount += 1
-		if more:
-			img = self.frameToImage(freeze)
-			if self.tempCount >= len(self.frames): # file included no lines of instances on this frame
-				curr = Frame(frameNum=self.tempCount, img=img)
-				print("filled frame: " + str(curr.frameNum))
-				self.frames.append(curr)
-			else:
-				self.frames[self.tempCount].img = img
-		else: # finished loading
-			self.stopEvent.set()
-			self.filling = False
-			self.curr = self.frames[1]
-			for i in self.frames:
-				print(str(i.frameNum))
-			self.newFrame()
-
 
 	def commitEdits(self):
 		pass
@@ -412,36 +482,12 @@ class Annotator():
 
 	# WINDOW CASES
 	def onClose(self):
-		# TODO save everything before closing
+		# NOTE: Save everything before closing entire window
 		self.stop()
 
-	# TEXT FILES
-	def fillFiles(self):
-		frm_index = 0
-		id_index = 1
-		box_index = 2
-		# each frame stores which identities are on its frame
-		# each identity stores its box on each frame
-		file = open("/Users/laurenkafkaloff/Desktop/TestData.txt","r")
-		for line in file:
-			# 1, 3, 794.27, 247.59, 71.245, 174.88, -1, -1, -1, -1
-			textArray = line.split(",")
-			a_frame = int(textArray[frm_index])
-			if a_frame == len(self.frames):
-				self.frames.append(Frame(frameNum=a_frame))
-			x1 = textArray[box_index]
-			y1 = textArray[box_index + 1]
-			x2 = x1 + textArray[box_index + 2]
-			y2 = y1 + textArray[box_index + 3]
 
-			box =  {"x1":x1, "y1":y1, "x2":x2, "y2":y2}
-			self.frames[a_frame].addInstance(textArray[id_index], box)
-			# print(str(a_frame) + ":  " + str(textArray[id_index]) + "= " + x1 + " " + y1)
-		for frame in self.frames:
-			if not frame is None:
-				for i in frame.instances.keys():
-					print(str(i) + ": " + str(frame.instances[i]))
 
+		# NOTE: Only load specified range of frames
 		# LOAD A SPECIFIED RANGE OF FRAMES AHEAD OF TIME -- WHEN SWAPPINNG IDS, DON'T LOAD PAST THIS EITHER
 		# first create all the frames w instances and frame num
 		# go back through and put all the images into the frames with a "show = false"
