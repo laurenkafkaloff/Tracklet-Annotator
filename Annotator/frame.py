@@ -9,17 +9,39 @@ class Frame(object):
 		self.fillBoxes()
 
 
-		# boxes = [ (id, box), ...]
-		# box = {x1, y1, x2, y2, col}
+		# boxes = { id: box }
+		# box = {x1, y1, x2, y2}
 
 	def fillBoxes(self):
+		file = open("/Users/laurenkafkaloff/Desktop/TestData.txt","r") 
+		print(file.readline())
 		# parse data
-		self.boxes = []
+		# let boxes index = identity number
+		# RESIZE BOXES BASED ON IMAGE SIZE
+		self.boxes = {}
 
 
-	def addBox(self, box, id=None):
+	def addBox(self, box):
+		# box = {x1, y1, x2, y2, id}
+		# make the box go from top left to bottom right
+		if box['x1'] > box['x2']:
+			newx1, newx2 = box['x2'], box['x1']
+		else: 
+			newx1, newx2 = box['x1'], box['x2']
+		if box['y1'] > box['y2']:
+			newy1, newy2 = box['y2'], box['y1']
+		else: 
+			newy1, newy2 = box['y1'], box['y2']
+
+		self.boxes[box['id']] = {"x1":newx1, "y1":newy1, "x2":newx2, "y2":newy2, "id":box['id']}
+
+	def swapBoxes(self, box1, box2):
 		# add new tuple with box and identity
-		# box = {x1, y1, x2, y2}
+		# box = {x1, y1, x2, y2, id}
+		pass
+
+	def updateID(self, box, id):
+		# include IDs from previous frame
 		pass
 
 	def commitBoxes():
