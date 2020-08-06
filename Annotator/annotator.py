@@ -23,8 +23,11 @@ class Annotator():
 		self.top_two_bars = 45
 		self.leftPanelWidth = 200
 		self.leftPanelHeight_Row0 = 200
-		self.leftPanelHeight_Row1 = 100
+		self.leftPanelHeight_Row1 = 10
 		self.leftPanelHeight_Row2 = 50
+
+		self.displayedIdent1Height = 15
+		self.displayedIdent2Height = 15
 
 		# FILLING VIDEO
 		self.filling = False
@@ -36,7 +39,7 @@ class Annotator():
 		self.stopEvent = threading.Event()
 		self.playing = False
 		self.frames = [Frame(frameNum=0)]
-		self.curr = None #Frame(frameNum=0) #, img=None, boxes=None)
+		self.curr = Frame(frameNum=0) #, img=None, boxes=None)
 		self.displayedImage = None
 
 		# BOUNDING BOXES
@@ -50,6 +53,14 @@ class Annotator():
 		self.saveBox = None
 		self.topLevelOpen = False
 		self.boxes = {}
+
+		self.tempBoxStorage = {} # { id : box creation }
+		self.editorMode = False
+		self.selecting = False
+		self.redrawing = False
+
+		# IDENTITIES
+		self.lastSelectedId = None
 
 		# INSTANCES
 		self.allInstances = {} # { id : instance }
@@ -65,7 +76,7 @@ class Annotator():
 		self.width = width
 		self.img_width = width - self.leftPanelWidth - self.border # border on right = 10
 
-		self.canvas = Canvas(master=self.window, width=self.width, height=self.height, relief=SUNKEN)
+		self.canvas = Canvas(master=self.window, width=self.width, height=self.height, relief='flat')
 		self.window.minsize(self.width, self.height)
 
 		# HEADER
@@ -115,7 +126,7 @@ class Annotator():
 
 		# edit buttons
 		self.frm_editor = tk.Frame(master=self.frm_leftPanel)
-		self.btn_editAndSave = tk.Button(master=self.frm_editor, text="Close Editor & Save", command=self.editAndSave, width=15)
+		self.btn_editAndSave = tk.Button(master=self.frm_editor, text="Open Editor", command=self.editAndSave, width=15)
 		self.btn_newBox = tk.Button(master=self.frm_editor, text="Create new box", command=self.newBox)
 		self.btn_redrawBox = tk.Button(master=self.frm_editor, text="Redraw box", command=self.redrawBox)
 		self.btn_changeId = tk.Button(master=self.frm_editor, text="Change box ID", command=self.changeId)
@@ -124,10 +135,16 @@ class Annotator():
 		# self.btn_newBox.grid(row=1, column=0)
 		# self.btn_redrawBox.grid(row=2, column=0)
 		# self.btn_changeId.grid(row=3, column=0)
-		self.editAndSave()
 		self.frm_editor.grid(sticky=N+W, row=0, column=0)
 
 		# identities panel
+		self.frm_identities = tk.Frame(master=self.frm_leftPanel)
+		self.lbl_allidheader = tk.Label(master=self.frm_identities,text=" All Identities")
+		self.listb_allIds = tk.Listbox(master=self.frm_identities, borderwidth=6, relief="flat", height=2 * self.leftPanelHeight_Row1)
+
+		self.lbl_allidheader.grid(sticky=N+W, row=2, column=0)
+		self.listb_allIds.grid(sticky=N+W, row=3, column=0)
+		self.frm_identities.grid(sticky=N+W, row=1, column=0)
 
 
 		# checkboxes
@@ -158,6 +175,9 @@ class Annotator():
 		self.cvs_image.bind("<B1-Motion>", self.drag)
 		self.cvs_image.bind("<ButtonRelease-1>", self.release)
 
+		# IDENTITIES
+		self.listb_allIds.bind('<<ListboxSelect>>', self.clickId)
+
 	# Show
 		self.lbl_header.grid(row=0, column=0)
 		self.frm_toolbar.grid(row=1, column=0)
@@ -168,7 +188,13 @@ class Annotator():
 
 	# BOUNDING BOXES
 	def selectBox(self):
-		pass
+		self.selecting = True
+		for id in self.curr.instances.keys():
+			self.cvs_image.delete(self.boxes[id])
+			box = self.curr.instances[id]
+			self.boxes[id] = self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline='red', width=5, activefill='red')
+
+
 		# hovering on image will highlight edges and let you select already drawn box
 
 	def selectId(self):
@@ -176,15 +202,26 @@ class Annotator():
 		# hovering on ids will highlight rows and let you select existing id or create new one
 
 	def newBox(self):
-		self.penDown()
+		if not self.lastSelectedId is None:
+			self.cvs_image.delete(self.boxes[self.lastSelectedId])
+			self.setNaturalBox(self.lastSelectedId)
+		# self.penDown()
 		# selectId(self)
+		pass
 
 	def redrawBox(self):
-		pass
-		# erase selectBox() but store its id
-		# pendown()
+		if not self.lastSelectedId is None:
+			self.cvs_image.delete(self.boxes[self.lastSelectedId])
+			self.setNaturalBox(self.lastSelectedId)
+
+		self.redrawing = True
+		# self.setNaturalBox(self.lastSelectedId)
+		self.selectBox()
 
 	def changeId(self):
+		if not self.lastSelectedId is None:
+			self.cvs_image.delete(self.boxes[self.lastSelectedId])
+			self.setNaturalBox(self.lastSelectedId)
 		pass
 		# selectBox()
 		# dialog asking to (1) select another box on screen (2) select id in list or create new id
@@ -192,26 +229,65 @@ class Annotator():
 		# (2) -> updateId()
 
 	def editAndSave(self):
-		if self.btn_editAndSave['text'] == "Open Editor":
+		if not self.editorMode:
 			self.btn_newBox.grid(sticky=N+W, row=1, column=0)
 			self.btn_redrawBox.grid(sticky=N+W,row=2, column=0)
 			self.btn_changeId.grid(sticky=N+W, row=3, column=0)
+			self.editorMode = True
+			self.loadNewFrame()
 			self.btn_editAndSave.config(text="Close Editor & Save")
 		else:
+			self.editorMode = False
 			self.btn_newBox.grid_forget()
 			self.btn_redrawBox.grid_forget()
 			self.btn_changeId.grid_forget()
 			self.btn_editAndSave.config(text="Open Editor")
 
-	def penDown(self):
-		self.drawing = True
+	def clickId(self, event):
+		if not self.lastSelectedId is None:
+			self.cvs_image.delete(self.boxes[self.lastSelectedId])
+			self.setNaturalBox(self.lastSelectedId)
+			# NOTE: Create a method to draw natural box of id
+		w = event.widget
+		index = int(w.curselection()[0])
+		id = w.get(index)
+		self.lastSelectedId = id
+		box = self.curr.instances[id]
+		print(str(self.boxes.get(id)))
+		self.cvs_image.delete(self.boxes[id])
+		self.boxes[id] = self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(box['color']), width=7)
+		# TODO: CAN'T CLICK THINGS UNTIL IN EDITOR MODE, OTHERWISE BOXES IS EMPTY
+		# BUG: On the second redraw, identity selected box doesn't disappear if clicked
 
-	def penUp(self):
-		self.drawing = False
+	def setNaturalBox(self, id):
+		box = self.curr.instances[id]
+		self.boxes[self.lastSelectedId] = self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(box['color']), width=2)
 
 	def click(self, event):
 		# select id first (or say new bird)
-		if self.drawing:
+		if self.selecting:
+			minimum = float("inf")
+			self.selectedBox = None
+			selectedId = None
+			for id in self.curr.instances.keys():
+				self.cvs_image.delete(self.boxes[id])
+				box = self.curr.instances[id]
+				self.boxes[id] = self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(box['color']), width=2)
+				dx = min([abs(event.x - float(box['x1'])), abs(event.x - float(box['x2']))])
+				dy = min([abs(event.y - float(box['y1'])), abs(event.y - float(box['y2']))])
+				# dx = min([abs(float(event.x) - float(box['x1'])), abs(float(event.x) - float(box['x2']))])
+				# dy = min([abs(float(event.y) - float(box['y1'])), abs(float(event.y) - float(box['y2']))])
+				if dx + dy < minimum:
+					minimum = dx + dy
+					selectedBox = self.boxes[id]
+					selectedId = id
+			self.cvs_image.delete(selectedBox)
+			self.cvs_image.delete(self.boxes[selectedId])
+			self.curr_id = selectedId
+			if self.redrawing:
+				self.drawing = True
+
+		elif self.drawing:
 			self.curr_box = {"x1":0, "y1":0, "x2":0, "y2":0}
 			self.curr_box['x1'], self.curr_box['y1'] = event.x, event.y
 			self.rect = self.cvs_image.create_rectangle(event.x, event.y, event.x, event.y, outline="white", width=2)
@@ -221,15 +297,15 @@ class Annotator():
 			self.cvs_image.coords(self.rect, self.curr_box['x1'], self.curr_box['y1'], event.x, event.y)
 
 	def release(self, event):
-		if self.drawing:
+		if self.drawing and not self.selecting:
 			if abs(event.x - self.curr_box['x1']) < self.minBoxSize or abs(event.y - self.curr_box['y1']) < self.minBoxSize:
 				self.cvs_image.delete(self.rect)
 			elif not self.topLevelOpen:
 				self.curr_box['x2'], self.curr_box['y2'] = event.x, event.y
-				self.curr_box['id'] = self.curr_id
+				self.curr_box['color'] = self.curr.instances[self.curr_id]['color']
 				self.saveOrCancel(event)
-		if self.btn_editAndSave['text'] == "Close Editor & Save":
-			self.drawing = True
+		else:
+			self.selecting = False # need to release once before drawing new rect
 
 	def saveOrCancel(self, event):
 		self.topLevelOpen = True
@@ -263,8 +339,13 @@ class Annotator():
 	def btn_confirm(self):
 		#print(str(self.frames.get(self.curr.frameNum) is None))
 		self.frames[self.curr.frameNum] = self.allInstances[str(self.curr_id)].updateBoxes(self.curr_box, self.curr)
+		box = self.curr_box
+		self.boxes[id] = self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(box['color']), width=2)
 		self.win.destroy()
 		self.topLevelOpen = False
+
+		self.drawing = False
+		self.redrawing = False
 
 	def miniClose(self):
 		self.btn_cancel()
@@ -273,7 +354,6 @@ class Annotator():
 		self.drawing = False
 		if self.rect != None:
 			self.cvs_image.delete(self.rect)
-
 
 	# DISPLAY
 	def leftkey(self, event):
@@ -351,6 +431,7 @@ class Annotator():
 		# each frame stores which identities are on its frame
 		# each identity stores its box on each frame
 		file = open("/Users/laurenkafkaloff/Desktop/TestData.txt","r")
+		file = open("/Users/laurenkafkaloff/Downloads/2DMOT2015/train/KITTI-17/det/det.txt", "r")
 		for line in file:
 			# 1, 3, 794.27, 247.59, 71.245, 174.88, -1, -1, -1, -1
 			textArray = line.split(",")
@@ -358,9 +439,7 @@ class Annotator():
 			a_id = str(textArray[id_index])
 
 			# add frame if it doesn't exist yet
-			print(str(a_frame) + " " + str(len(self.frames)))
 			if a_frame == len(self.frames):
-				print("new frame: " + str(a_frame))
 				self.frames.append(Frame(frameNum=a_frame))
 
 			x1 = float(textArray[box_index]) * self.boxMult # accounts for image resizing
@@ -376,9 +455,9 @@ class Annotator():
 			if self.allInstances.get(a_id) is None:
 				self.i = Instance(a_id, "white")
 				self.allInstances[a_id] = self.i
+				self.listb_allIds.insert(END, str(a_id))
 
 			# add box to an existing instance's list of boxes
-			print(str(self.allInstances.get(a_id)))
 			self.allInstances[a_id].updateBoxes(box, self.frames[a_frame])
 		for frame in self.frames:
 			if not frame is None:
@@ -408,13 +487,19 @@ class Annotator():
 			self.f.addInstance(id, box)  # store box onto frame so you don't have to retreive it again
 
 	def loadNewFrame(self):
+		self.boxes = {}
 		if not self.displayedImage is None:
 			self.cvs_image.delete(self.displayedImage)
 		self.displayedImage = self.cvs_image.create_image(0, 0, anchor="nw", image=self.curr.img) # load new image
 		self.lbl_frameNum.config(text="Frame Number: " + str(self.curr.frameNum)) # load new frame number
-		for id in self.curr.instances.keys():
-			box = self.curr.instances[id]
-			self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(box['color']), width=2)
+		if self.editorMode:
+			for id in self.curr.instances.keys():
+				box = self.curr.instances[id]
+				self.boxes[id] = self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(box['color']), width=2)
+		else:
+			for id in self.curr.instances.keys():
+				box = self.curr.instances[id]
+				self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(box['color']), width=2)
 		# NOTE: loadnewboxes when saving images and store boxes to frame; when identities are swapped, note them as a seperate set of
 
 	def next(self):
