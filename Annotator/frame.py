@@ -8,7 +8,7 @@ class Frame(object):
 
 		# box = { x1, y1, x2, y2, color }
 	def addInstance(self, id, box=None):
-		self.instances[id] = box # INCLUDES COLOR
+		self.instances[id] = box # INCLUDES COLOR AND INDEX
 
 	def swapBoxes(self, box1, box2):
 		# add new tuple with box and identity
