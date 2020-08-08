@@ -62,9 +62,3 @@ class ColorSetter(object):
 		    # "white": "#ffffff",
 		    "yellow": "#ffff00"
 		}
-
-
-
-
-	# frame will store all instances on it in a dictionary { instance: box }
-	#

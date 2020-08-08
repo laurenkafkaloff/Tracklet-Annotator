@@ -557,13 +557,14 @@ class Annotator():
 		self.displayedImage = self.cvs_image.create_image(0, 0, anchor="nw", image=self.curr.img) # load new image
 		self.lbl_frameNum.config(text="Frame Number: " + str(self.curr.frameNum)) # load new frame number
 		box = None
+		removeInstances = []
 		if self.editorMode:
 			for id in self.curr.instances.keys():
 				if id in self.idsHaveChanged:
 					if self.allInstances[id].boxes.get(self.curr.frameNum) is not None:
 						self.curr.addInstance(id, self.allInstances[id].boxes[self.curr.frameNum])
 					else:
-						self.curr.removeInstance(id)
+						removeInstances.append(id)
 						continue
 				box = self.curr.instances[id]
 				self.boxes[id] = self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(box['color']), width=2)
@@ -571,13 +572,16 @@ class Annotator():
 		else:
 			for id in self.curr.instances.keys():
 				if id in self.idsHaveChanged:
-					box = self.allInstances[id].boxes[self.curr.frameNum]
-				else:
-					self.curr.removeInstance(id)
-					continue
+					if self.allInstances[id].boxes.get(self.curr.frameNum) is not None:
+						self.curr.addInstance(id, self.allInstances[id].boxes[self.curr.frameNum])
+					else:
+						removeInstances.append(id)
+						continue
 				box = self.curr.instances[id]
 				self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(box['color']), width=2)
-
+		for id in removeInstances:
+			self.curr.removeInstance(id)
+			
 	def frameToImage(self, freeze):
 		rgb = cv2.cvtColor(freeze, cv2.COLOR_BGR2RGB)
 		img = Image.fromarray(rgb)
