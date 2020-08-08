@@ -10,7 +10,6 @@ class ColorSetter(object):
 		if not self.order:
 			self.reset()
 		col = str(self.order.pop())
-		print(col)
 		return col, str(self.avail[col])
 
 	def reset(self):

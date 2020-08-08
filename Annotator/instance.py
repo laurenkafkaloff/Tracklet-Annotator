@@ -16,7 +16,7 @@ class Instance(object):
 			self.maxFrame = frame.frameNum
 		frame.addInstance(self.id, box)
 
-	def updateId(self, newId, frameNum, oldFrames):
+	def updateId(self, newId, frameNum, oldFrames): # for changing id that's not on frame -- think you can just run swapid?
 		newFrames = oldFrames
 		for key in self.boxes:
 			if int(key) >= frameNum:
@@ -26,13 +26,16 @@ class Instance(object):
 				newFrames[int(key)] = workingFrame
 		return newFrames
 
-	def swapId(self, second, frameNum, frames):
+	def swapId(self, second, frameNum, frames, idsHaveChanged):
 		# frame will store all instances on it in a dictionary { instance: box }
 		a = self
 		b = second
 		laterTrack = b
 		if a.maxFrame >= b.maxFrame:
 			laterTrack = a
+
+		idsHaveChanged.append(a)
+		idsHaveChanged.append(b)
 
 		keys = copy.deepcopy(list(laterTrack.boxes.keys()))
 		for key in keys:
