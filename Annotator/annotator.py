@@ -49,7 +49,6 @@ class Annotator():
 		self.displayedImage = None
 
 		# BOUNDING BOXES / EDITOR
-		self.resetEditor()
 		self.editorMode = False
 		self.minBoxSize = 10
 		self.selectingBoxThreshold = 100
@@ -74,6 +73,8 @@ class Annotator():
 
 		self.canvas = Canvas(master=self.window, width=self.width, height=self.height, relief='flat')
 		self.window.minsize(self.width, self.height)
+
+		self.resetEditor()
 
 		# HEADER
 		self.lbl_header = tk.Label(master=self.canvas,text="No file loaded")
@@ -133,11 +134,14 @@ class Annotator():
 
 		# identities panel
 		self.frm_identities = tk.Frame(master=self.frm_leftPanel)
-		self.lbl_allidheader = tk.Label(master=self.frm_identities,text=" All Identities")
+		self.lbl_allidheader = tk.Label(master=self.frm_identities, text=" All Identities")
 		self.btn_newId = tk.Button(master=self.frm_identities, text="New ID", command=self.newId)
 		self.listb_allIds = tk.Listbox(master=self.frm_identities, borderwidth=6, relief="flat", height=2 * self.leftPanelHeight_Row1, selectforeground="white", selectbackground="Black", activestyle="underline")
 
 		# checkboxes
+		self.frm_checkboxes = tk.Frame(master=self.frm_leftPanel)
+		self.ckb_prev = tk.Checkbutton(master=self.frm_checkboxes, text="Show Previous Boxes", variable = self.p, command = self.showPrev)
+		self.ckb_next = tk.Checkbutton(master=self.frm_checkboxes, text="Show Next Boxes", variable = self.n, command = self.showNext)
 
 		# format
 		self.frm_leftPanel.grid_rowconfigure(0, minsize=self.leftPanelHeight_Row0)
@@ -182,6 +186,8 @@ class Annotator():
 		self.saveBox = None
 		self.topLevelOpen = False
 		self.boxes = {}
+		self.boxes_prev = {}
+		self.boxes_next = {}
 		self.curr_box = {"x1":0, "y1":0, "x2":0, "y2":0}
 		self.curr_id = None
 		self.drawing = False
@@ -192,6 +198,10 @@ class Annotator():
 		self.gettingSecondId = False
 		self.firstId = None
 		self.secondId = None
+		self.p = tk.IntVar()
+		self.n = tk.IntVar()
+		self.prev_on = True
+		self.next_on = True
 
 # EDITOR MODE
 	# OPEN EDITOR
@@ -208,6 +218,10 @@ class Annotator():
 			self.btn_newId.grid(sticky=N+E, row=0, column=1)
 			self.listb_allIds.grid(sticky=N+W, row=1, column=0, columnspan = 2)
 
+			self.frm_checkboxes.grid(sticky=S+W, row=2, column=0)
+			self.ckb_prev.grid(sticky=S+W, row=0, column=0)
+			self.ckb_next.grid(sticky=S+W, row=1, column=0)
+
 			self.loadNewFrame()
 			self.btn_editAndSave.config(text="CLOSE EDITOR & SAVE")
 		else:
@@ -218,7 +232,38 @@ class Annotator():
 			self.btn_deleteBox.grid_forget()
 
 			self.frm_identities.grid_forget()
+			self.frm_checkboxes.grid_forget()
 			self.btn_editAndSave.config(text="OPEN EDITOR")
+
+	def showPrev(self):
+		if self.prev_on:
+			self.prev_on = False
+			if self.curr.frameNum - 1 >= 1:
+				for id in self.frames[self.curr.frameNum - 1].instances.keys():
+					box = self.allInstances[id].boxes[self.curr.frameNum - 1]
+					self.boxes_prev[id] = self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(box['color']), width=1)
+					self.listb_allIds.itemconfig(self.allInstances[id].index, fg='red')
+		else:
+			self.prev_on = True
+			for id in self.boxes_prev.keys():
+				self.cvs_image.delete(self.boxes_prev[id])
+				self.listb_allIds.itemconfig(self.allInstances[id].index, fg='black')
+			self.boxes_prev = {}
+
+	def showNext(self):
+		if self.next_on:
+			self.next_on = False
+			if self.curr.frameNum + 1 < len(self.frames):
+				for id in self.frames[self.curr.frameNum + 1].instances.keys():
+					box = self.allInstances[id].boxes[self.curr.frameNum + 1]
+					self.boxes_next[id] = self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(box['color']), width=1)
+					self.listb_allIds.itemconfig(self.allInstances[id].index, fg='green')
+		else:
+			self.next_on = True
+			for id in self.boxes_next.keys():
+				self.cvs_image.delete(self.boxes_next[id])
+				self.listb_allIds.itemconfig(self.allInstances[id].index, fg='black')
+			self.boxes_next = {}
 
 	# LEFT PANEL BUTTONS
 	def newBox(self):
@@ -597,6 +642,12 @@ class Annotator():
 				box = self.curr.instances[id]
 				self.boxes[id] = self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(box['color']), width=2)
 				self.listb_allIds.itemconfig(self.allInstances[id].index, bg=box['color'])
+			# if self.frames.get(self.curr.frameNum - 1) is not None:
+			# 	for id in self.frames[self.curr.frameNum - 1].instances.keys():
+			# 		boxes_prev[id] = self.allInstances[id].boxes[self.curr.frameNum - 1]
+			# if self.frames.get(self.curr.frameNum + 1) is not None:
+			# 	for id in self.frames[self.curr.frameNum + 1].instances.keys():
+			# 		boxes_prev[id] = self.allInstances[id].boxes[self.curr.frameNum + 1]
 		else:
 			for id in self.curr.instances.keys():
 				if id in self.idsHaveChanged:
