@@ -83,4 +83,4 @@ class Instance(object):
 		else:
 			newy1, newy2 = box['y1'], box['y2']
 
-		return {"x1":newx1, "y1":newy1, "x2":newx2, "y2":newy2, "color":box['color']}
+		return {"x1":newx1, "y1":newy1, "x2":newx2, "y2":newy2, "color":self.color}
