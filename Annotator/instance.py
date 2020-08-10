@@ -3,9 +3,10 @@ import copy
 
 class Instance(object):
 
-	def __init__(self, id=None, index=None, color="white"):
+	def __init__(self, id=None, index=None, color="white", colorName="white"):
 		self.id = id
 		self.color = color
+		self.colorName = colorName
 		self.index = index
 		self.boxes = {} # { framenum: box }
 		self.maxFrame = 0
@@ -82,4 +83,4 @@ class Instance(object):
 		else:
 			newy1, newy2 = box['y1'], box['y2']
 
-		return {"x1":newx1, "y1":newy1, "x2":newx2, "y2":newy2, "color":box['color']}
+		return {"x1":newx1, "y1":newy1, "x2":newx2, "y2":newy2, "color":self.color}

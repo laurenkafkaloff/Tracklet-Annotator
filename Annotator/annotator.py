@@ -5,6 +5,7 @@ from PIL import ImageTk,Image
 import time
 import threading
 import os
+import shutil
 import math
 import copy
 
@@ -14,8 +15,8 @@ from Annotator.colors import ColorSetter
 import cv2
 
 class Annotator():
-	# TODO: Organize identities into on curr frame, prev frame, next frame when entering edtior mode
-	# TODO: Add new writable file to folder with some consistent naming scheme, only store changes and don't commit them, have option to merge files
+	# TODO: Account for edge cases
+	# TODO: Update UI
 	# NOTE: Export environment into github
 	# CASE: Opening a second video -- need to reset like everything
 
@@ -24,7 +25,8 @@ class Annotator():
 		# DISPLAY
 		self.width, self.height = 960, 600 # width overwritten by screensize
 		self.border = 10
-		self.top_two_bars = 45
+		self.dialog_height = 45
+		self.dialog_width = 600
 		self.leftPanelWidth = 200
 		self.leftPanelHeight_Row0 = 200
 		self.leftPanelHeight_Row1 = 10
@@ -49,7 +51,6 @@ class Annotator():
 		self.displayedImage = None
 
 		# BOUNDING BOXES / EDITOR
-		self.resetEditor()
 		self.editorMode = False
 		self.minBoxSize = 10
 		self.selectingBoxThreshold = 100
@@ -60,6 +61,9 @@ class Annotator():
 		self.colorSetter = ColorSetter()
 		self.idsHaveChanged = []
 		self.maxId = -1
+
+		# DIALOG
+		self.dialogCount = 0
 
 		# TEXT FILES
 		self.frameswithboxes = []
@@ -75,8 +79,11 @@ class Annotator():
 		self.canvas = Canvas(master=self.window, width=self.width, height=self.height, relief='flat')
 		self.window.minsize(self.width, self.height)
 
+		self.resetEditor()
+
 		# HEADER
 		self.lbl_header = tk.Label(master=self.canvas,text="No file loaded")
+		self.lbl_frameNum = tk.Label(master=self.canvas,text=" Frame Number: ")
 
 		# TOOLBAR
 		self.frm_toolbar = tk.Frame(master=self.canvas, height=10)
@@ -85,18 +92,18 @@ class Annotator():
 		self.btn_prev = tk.Button(master=self.frm_toolbar, text="Prev Frame", command=self.btn_prev)
 		self.btn_start = tk.Button(master=self.frm_toolbar, text="Start", command=self.start)
 		self.btn_stop = tk.Button(master=self.frm_toolbar, text="Stop", command=self.stop)
-		self.lbl_frameNum = tk.Label(master=self.frm_toolbar,text=" Frame Number: ")
 		self.btn_open.grid(row=0, column=0)
 		self.btn_next.grid(row=0, column=1)
 		self.btn_prev.grid(row=0, column=2)
 		self.btn_start.grid(row=0, column=3)
 		self.btn_stop.grid(row=0, column=4)
-		self.lbl_frameNum.grid(row=0, column=5)
 		self.frm_toolbar.grid(row=1, column=0)
 
+		# DIALOG
+		self.list_dialog = tk.Listbox(master=self.canvas, borderwidth=6, relief="flat", height=int(self.dialog_height/8), width=int(self.dialog_width/8), fg="white", bg='black', activestyle="none", font="Courier 11", selectforeground="lightpink", selectbackground="Black")
 		# Main Elements
-		# 		       Header
-		#		      Tool Bar
+		#    Header    |  Scrolling
+		#	Tool Bar   |   Dialog
 		#            Main Frame
 		#   LEFT PANEL (frm)   LABEL
 		# |   edit buttons   | image |
@@ -133,11 +140,15 @@ class Annotator():
 
 		# identities panel
 		self.frm_identities = tk.Frame(master=self.frm_leftPanel)
-		self.lbl_allidheader = tk.Label(master=self.frm_identities,text=" All Identities")
+		self.lbl_allidheader = tk.Label(master=self.frm_identities, text=" All Identities")
 		self.btn_newId = tk.Button(master=self.frm_identities, text="New ID", command=self.newId)
-		self.listb_allIds = tk.Listbox(master=self.frm_identities, borderwidth=6, relief="flat", height=2 * self.leftPanelHeight_Row1, selectforeground="white", selectbackground="Black", activestyle="underline")
+		self.list_ids = tk.Listbox(master=self.frm_identities, borderwidth=6, relief="flat", height=2 * self.leftPanelHeight_Row1, selectforeground="white", selectbackground="Black", activestyle="underline")
 
 		# checkboxes
+		self.frm_checkboxes = tk.Frame(master=self.frm_leftPanel)
+		self.ckb_prev = tk.Checkbutton(master=self.frm_checkboxes, text="Show Previous Boxes", variable = self.p, command = self.showPrev)
+		self.ckb_next = tk.Checkbutton(master=self.frm_checkboxes, text="Show Next Boxes", variable = self.n, command = self.showNext)
+		self.btn_commmit = tk.Button(master=self.frm_checkboxes, text="Commit Edits", command=self.commitEdits)
 
 		# format
 		self.frm_leftPanel.grid_rowconfigure(0, minsize=self.leftPanelHeight_Row0)
@@ -161,18 +172,27 @@ class Annotator():
 		# BOUNDING BOXES
 		# NOTE: Add undo button binding
 		self.window.bind('<Escape>', self.key_esc)
+
+		self.window.bind('<y>', self.confirm)
+		self.window.bind('<n>', self.cancel)
+
 		self.cvs_image.bind("<ButtonPress-1>", self.click)
 		self.cvs_image.bind("<B1-Motion>", self.drag)
 		self.cvs_image.bind("<ButtonRelease-1>", self.release)
 
 		# IDENTITIES
-		self.listb_allIds.bind('<<ListboxSelect>>', self.clickId)
+		self.list_ids.bind('<<ListboxSelect>>', self.clickId)
+		self.list_dialog.bind('<<ListboxSelect>>', self.doNothing)
 
 	# Show
-		self.lbl_header.grid(row=0, column=0)
-		self.frm_toolbar.grid(row=1, column=0)
-		self.frm_main.grid(row=2, column=0)
-		self.canvas.grid_columnconfigure(0, weight=1)
+		self.lbl_header.grid(row=0, column=1, sticky=N)
+		self.lbl_frameNum.grid(row=1, column=1, sticky=S)
+		self.frm_toolbar.grid(row=2, column=1, sticky=N)
+		self.list_dialog.grid(row=0, column=2, rowspan=3, sticky=E)
+		self.frm_main.grid(row=3, column=0, columnspan=3)
+		self.canvas.grid_columnconfigure(0, weight=1, minsize=self.leftPanelWidth)
+		self.canvas.grid_columnconfigure(1, weight=1)
+		self.canvas.grid_columnconfigure(2, weight=1, minsize=self.dialog_width)
 		self.canvas.pack()
 		self.window.mainloop()
 
@@ -182,16 +202,28 @@ class Annotator():
 		self.saveBox = None
 		self.topLevelOpen = False
 		self.boxes = {}
+		self.boxes_prev = {}
+		self.boxes_next = {}
 		self.curr_box = {"x1":0, "y1":0, "x2":0, "y2":0}
 		self.curr_id = None
+		self.active_id = None
+		self.firstId = None
+		self.secondId = None
+		self.p = tk.IntVar()
+		self.n = tk.IntVar()
+		self.prev_on = True
+		self.next_on = True
+		self.resetActions()
+
+	def resetActions(self):
 		self.drawing = False
 		self.selectingBox = False
+		self.deletingBox = False
 		self.redrawing = False
 		self.newingBox = False
 		self.changingId = False
 		self.gettingSecondId = False
-		self.firstId = None
-		self.secondId = None
+		self.waitingForClick = False
 
 # EDITOR MODE
 	# OPEN EDITOR
@@ -206,7 +238,12 @@ class Annotator():
 			self.frm_identities.grid(sticky=N+W, row=1, column=0)
 			self.lbl_allidheader.grid(sticky=S+W, row=0, column=0)
 			self.btn_newId.grid(sticky=N+E, row=0, column=1)
-			self.listb_allIds.grid(sticky=N+W, row=1, column=0, columnspan = 2)
+			self.list_ids.grid(sticky=N+W, row=1, column=0, columnspan = 2)
+
+			self.frm_checkboxes.grid(sticky=S+W, row=2, column=0)
+			self.ckb_prev.grid(sticky=S+W, row=0, column=0)
+			self.ckb_next.grid(sticky=S+W, row=1, column=0)
+			self.btn_commmit.grid(sticky=S+W, row=2, column=0)
 
 			self.loadNewFrame()
 			self.btn_editAndSave.config(text="CLOSE EDITOR & SAVE")
@@ -218,44 +255,71 @@ class Annotator():
 			self.btn_deleteBox.grid_forget()
 
 			self.frm_identities.grid_forget()
+			self.frm_checkboxes.grid_forget()
 			self.btn_editAndSave.config(text="OPEN EDITOR")
 
+	def showPrev(self):
+		if self.prev_on:
+			self.prev_on = False
+			if self.curr.frameNum - 1 >= 1:
+				for id in self.frames[self.curr.frameNum - 1].instances.keys():
+					box = self.allInstances[id].boxes[self.curr.frameNum - 1]
+					self.boxes_prev[id] = self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(box['color']), width=1)
+					self.list_ids.itemconfig(self.allInstances[id].index, fg='red')
+		else:
+			self.prev_on = True
+			for id in self.boxes_prev.keys():
+				self.cvs_image.delete(self.boxes_prev[id])
+				self.list_ids.itemconfig(self.allInstances[id].index, fg='black')
+			self.boxes_prev = {}
+
+	def showNext(self):
+		if self.next_on:
+			self.next_on = False
+			if self.curr.frameNum + 1 < len(self.frames):
+				for id in self.frames[self.curr.frameNum + 1].instances.keys():
+					box = self.allInstances[id].boxes[self.curr.frameNum + 1]
+					self.boxes_next[id] = self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(box['color']), width=1)
+					self.list_ids.itemconfig(self.allInstances[id].index, fg='green')
+		else:
+			self.next_on = True
+			for id in self.boxes_next.keys():
+				self.cvs_image.delete(self.boxes_next[id])
+				self.list_ids.itemconfig(self.allInstances[id].index, fg='black')
+			self.boxes_next = {}
+
 	# LEFT PANEL BUTTONS
+	# TODO: Esc undoes all button presses
 	def newBox(self):
+		self.resetActions()
 		if not self.boxes.get(self.lastSelectedId) is None:
 			self.setNaturalBox(self.lastSelectedId)
+		self.addToDialog("Select an identity in the left panel")
 		self.newingBox = True
 
 	def deleteBox(self):
+		self.resetActions()
 		if not self.boxes.get(self.lastSelectedId) is None:
 			self.setNaturalBox(self.lastSelectedId)
+		self.addToDialog("Select a box to delete")
 		self.deletingBox = True
 		self.selectBox()
 
 	def redrawBox(self):
+		self.resetActions()
 		if not self.boxes.get(self.lastSelectedId) is None:
 			self.setNaturalBox(self.lastSelectedId)
+		self.addToDialog("Select a box to redraw")
 		self.redrawing = True
 		self.selectBox()
 
 	def changeId(self):
+		self.resetActions()
 		if not self.boxes.get(self.lastSelectedId) is None:
 			self.setNaturalBox(self.lastSelectedId)
+		self.addToDialog("Select a box to change the identity of")
 		self.changingId = True
 		self.selectBox()
-
-		# 1. select box
-		# 2. select id
-		# - new id: do the stuff done when parsing file
-		# - old id: set curr_box = old id box (with new id and index), curr_id = new id
-		#			matchCurrBoxAndId()
-		#			set curr_box = old id box, curr_id = old id
-		#			deletebox(old id) -> boxes.remove(old id), set old to white
-
-		# selectBox()
-		# dialog asking to (1) select another box on screen (2) select id in list or create new id
-		# (1) -> swapId() PUT ONTO STACK TO RUN AT CONFIRM
-		# (2) -> updateId()
 
 	def selectBox(self):
 		self.selectingBox = True
@@ -267,20 +331,83 @@ class Annotator():
 			self.cvs_image.tag_bind(self.boxes[id], '<Leave>', lambda event, a=id: self.unmarkAsActiveBox(a))
 
 	def markAsActiveBox(self, id):
-		self.curr_id = id
+		self.active_id = id
 
 	def unmarkAsActiveBox(self, id):
-		self.curr_id = None
+		self.active_id = None
 
 	def newId(self, a_id=None):
 		if a_id is None:
 			self.maxId = self.maxId + 1
 			a_id = str(self.maxId)
 		colorName, colorId = self.colorSetter.getColor()
-		index = self.listb_allIds.size()
-		self.listb_allIds.insert(END, str(a_id) + "   " + colorName)
-		self.i = Instance(a_id, index, colorId)
+		index = self.list_ids.size()
+		self.list_ids.insert(END, str(a_id) + "   " + colorName)
+		self.i = Instance(a_id, index, colorId, colorName)
 		self.allInstances[a_id] = self.i
+		self.list_ids.yview(END)
+
+	def doNothing(self, event):
+		pass
+
+	def addToDialog(self, text, clickToConfirm=False):
+		if self.dialogCount > 0:
+			self.list_dialog.itemconfig(self.list_dialog.size() - 1, fg="grey")
+		self.list_dialog.insert(END, text)
+		if clickToConfirm:
+			self.waitingForClick = True
+			self.list_dialog.insert(END, "Click Y to confirm")
+			self.list_dialog.insert(END, "Click N to cancel")
+			self.list_dialog.itemconfig(self.list_dialog.size() - 2, fg="green")
+			self.list_dialog.itemconfig(self.list_dialog.size() - 1, fg="red")
+		else:
+			self.dialogCount += 1
+		self.list_dialog.yview(END)
+		self.list_dialog.selection_clear(0, END)
+
+	def confirm(self, event):
+		last = self.list_dialog.size() - 1
+		msg = self.list_dialog.get(last - 2)[:-4] + ": Confirmed"
+		self.list_dialog.delete(last)
+		self.list_dialog.delete(last - 1)
+		self.list_dialog.delete(last - 2)
+		self.addToDialog(msg)
+
+		if self.redrawing or self.newingBox:
+			self.cvs_image.delete(self.rect)
+
+		elif self.deletingBox:
+			self.allInstances[self.curr_id].boxes.pop(self.curr.frameNum)
+			self.curr.instances.pop(self.curr_id)
+			self.updateTempFrame(str(self.curr_id))
+
+
+		self.matchCurrBoxAndId()
+		self.resetActions()
+
+	def cancel(self, event):
+		last = self.list_dialog.size() - 1
+		msg = self.list_dialog.get(last - 2)[:-4] + ": Canceled"
+		self.list_dialog.delete(last)
+		self.list_dialog.delete(last - 1)
+		self.list_dialog.delete(last - 2)
+		self.addToDialog(msg)
+		self.waitingForClick = False
+
+		if self.redrawing or self.newingBox:
+			if self.redrawing:
+				box = self.allInstances[str(self.curr_id)].boxes[self.curr.frameNum]
+				self.boxes[str(self.curr_id)] = self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(box['color']), width=2)
+			self.cvs_image.delete(self.rect)
+			self.rect = None
+
+		elif self.changingId:
+			print("ya")
+			self.firstId = None
+			self.secondId = None
+
+		self.curr_id = None
+		self.resetActions()
 
 	# IDENTITY PANEL
 	def clickId(self, event):
@@ -292,17 +419,24 @@ class Annotator():
 		self.lastSelectedId = id
 
 		if self.newingBox:
-			if id is not self.curr.instances: # if not on frame -- wrong button otherwise
+			if id not in self.boxes.keys(): # if not on frame -- wrong button otherwise
 				self.curr_id = id
+				self.addToDialog("Draw a box for ID #" + str(self.curr_id))
 				self.drawing = True
+			else:
+				self.addToDialog("The selected identity is already on this frame -- please select again")
 
 		elif self.gettingSecondId:
 			for i in self.curr.instances.keys():
 				self.setNaturalBox(i)
-			self.secondId = id
-			self.gettingSecondId = False
-			self.selectingBox = False
-			self.matchCurrBoxAndId()
+			if id is not self.firstId:
+				self.secondId = id
+				self.gettingSecondId = False
+				self.selectingBox = False
+				self.addToDialog("Swapping identity tracks for ID #" + str(self.firstId) + " and #" + str(self.secondId) + " ...", True)
+			else:
+				self.addToDialog("The selected identity was the same as the first identity -- please select again")
+				self.selectBox()
 
 		elif self.boxes.get(id) is not None: # highlight the selected box
 			box = self.curr.instances[id]
@@ -330,74 +464,49 @@ class Annotator():
 		if self.drawing:
 			if abs(event.x - self.curr_box['x1']) < self.minBoxSize or abs(event.y - self.curr_box['y1']) < self.minBoxSize:
 				self.cvs_image.delete(self.rect)
-			elif not self.topLevelOpen:
+			elif not self.waitingForClick:
 				self.curr_box['x2'], self.curr_box['y2'] = event.x, event.y
-				self.saveOrCancel(event)
+				if self.redrawing:
+					self.addToDialog("Redrawing box from " + self.coordsToString(self.curr_box) + " for ID #" + self.curr_id + " ...", True)
+				elif self.newingBox:
+					self.addToDialog("Creating new box from " + self.coordsToString(self.curr_box) + " for ID #" + self.curr_id + " ...", True)
 
 		if self.selectingBox:
-			if self.curr_id is not None:
+			if self.active_id is not None:
+				self.curr_id = str(self.active_id)
 				for id in self.curr.instances.keys():
 					self.setNaturalBox(id)
 
 				if self.changingId:
-					if self.gettingSecondId and self.curr_id is not self.firstId:
-						self.secondId = self.curr_id
-						self.gettingSecondId = False
-						self.selectingBox = False
-						self.matchCurrBoxAndId()
+					if self.gettingSecondId:
+						if self.curr_id is not self.firstId:
+							self.secondId = self.curr_id
+							self.gettingSecondId = False
+							self.selectingBox = False
+							self.addToDialog("Swapping identity tracks for ID #" + str(self.firstId) + " and #" + str(self.secondId) + " ...", True)
+						else:
+							self.addToDialog("The selected identity was the same as the first identity -- please select again")
+							self.selectBox()
 					else:
 						self.firstId = self.curr_id
 						self.gettingSecondId = True
+						self.addToDialog("Select an identity from the left panel or a box to swap with ID #" + str(self.curr_id))
 						self.selectBox()
 
 				elif self.redrawing:
+					self.addToDialog("Draw new box for ID #" + str(self.curr_id))
 					self.cvs_image.delete(self.boxes[self.curr_id])
 					self.drawing = True
 					self.selectingBox = False
 
 				elif self.deletingBox:
-					# dialog to confirm
-					self.allInstances[self.curr_id].boxes.pop(self.curr.frameNum)
-					self.curr.instances.pop(self.curr_id)
-					self.updateTempFrame(self.curr_id)
-					self.deletingBox = False
+					self.addToDialog("Deleting box for ID #" + str(self.curr_id) + " ...", True)
 					self.selectingBox = False
+			else:
+				self.addToDialog("No box is currently highlighted - please select again")
 
-
-	def saveOrCancel(self, event):
-		self.topLevelOpen = True
-		self.win = Toplevel()
-
-		# Display
-		self.win.geometry("+%d+%d" % (event.x, event.y))
-		self.win.minsize(width=300, height=20)
-		self.win.grid_columnconfigure(0, weight=1)
-		self.win.grid_columnconfigure(1, weight=1)
-		self.win.grid_rowconfigure(0, weight=1)
-		self.win.grid_rowconfigure(1, weight=1)
-
-		# Features
-		self.win.title('New bounding box')
-		message = "Coords: " + str(self.cvs_image.coords(self.rect)) + "    ID: "
-		Label(self.win, text=message).grid(row=0, column=0, columnspan=23, sticky=W+E)
-		Button(self.win, text='Cancel', command=self.btn_cancel).grid(row=1, column=0)
-		Button(self.win, text='Confirm', command=self.btn_confirm).grid(row=1, column=1)
-
-		# Window Cases
-		self.win.protocol("WM_DELETE_WINDOW", self.miniClose)
-		return self.saveBox
-
-	def btn_cancel(self):
-		self.cvs_image.delete(self.rect)
-		self.rect = None
-		self.win.destroy()
-		self.topLevelOpen = False
-
-	def btn_confirm(self):
-		self.cvs_image.delete(self.rect)
-		self.matchCurrBoxAndId()
-		self.win.destroy()
-		self.topLevelOpen = False
+	def coordsToString(self, box):
+		return "(" + str(box['x1']) + ", " + str(box['y1']) + ") to (" + str(box['x2']) + ", " + str(box['y2']) + ")"
 
 	def updateTempFrame(self, id):
 		if self.boxes.get(id) is not None:
@@ -406,10 +515,10 @@ class Annotator():
 		if i.boxes.get(self.curr.frameNum) is not None:
 			box = i.boxes[self.curr.frameNum]
 			self.boxes[id] = self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=i.color, width=2)
-			self.listb_allIds.itemconfig(self.allInstances[id].index, bg=i.color)
+			self.list_ids.itemconfig(self.allInstances[id].index, bg=i.color)
 		else:
 			self.boxes.pop(id)
-			self.listb_allIds.itemconfig(self.allInstances[id].index, bg='white')
+			self.list_ids.itemconfig(self.allInstances[id].index, bg='white')
 
 
 	def matchCurrBoxAndId(self):
@@ -420,26 +529,14 @@ class Annotator():
 			a.swapId(b, self.curr.frameNum, self.frames, self.idsHaveChanged) # update long term storage frames
 			self.updateTempFrame(self.firstId) # update short term storage frame
 			self.updateTempFrame(self.secondId)
-			self.changingId = False
 
-
-			# - new id: do the stuff done when parsing file
-			# - old id: set curr_box = old id box (with new id and index), curr_id = new id
-			#			matchCurrBoxAndId()
-			#			set curr_box = old id box, curr_id = old id
-			#			deletebox(old id) -> boxes.remove(old id), set old to white
 		elif self.redrawing or self.newingBox:
 			id = self.allInstances[str(self.curr_id)]
 			id.updateBoxes(self.curr_box, self.curr)
 			self.updateTempFrame(self.curr_id)
-			self.drawing = False
-			self.redrawing = False
-			self.newingBox = False
-
-
 
 		self.curr_id = None
-
+		self.resetActions()
 
 	# CASES
 	def miniClose(self):
@@ -462,16 +559,55 @@ class Annotator():
 	def openDir(self):
 		folder = tk.filedialog.askdirectory(title = "Select directory with video and text file")
 		if folder is not "":
+			videoFile = None
 			for file in os.listdir(folder):
 				if file.lower().endswith(".txt"):
-					self.textFileName = str(folder + "/" + file)
+					self.textFileName = os.path.join(folder, file)
 				elif file.lower().endswith(".mp4"):
-					self.videoFileName = str(folder + "/" + file)
-		else:
-			self.textFileName = "/Users/laurenkafkaloff/Desktop/Moon/TestData.txt"
-			self.videoFileName = "/Users/laurenkafkaloff/Desktop/Moon/fewFrames.mp4"
+					videoFile = file[:-4]
+					self.videoFileName = os.path.join(folder, file)
+
+			directory = os.path.join(folder, "Edited Versions")
+			if not os.path.exists(directory):
+				os.mkdir(directory)
+			file_count = len(os.listdir(directory))
+			y = -1
+			prev = None
+			for file in os.listdir(directory):
+				x = file.split("_")[-1][:-4]
+				try:
+					if int(x) > y:
+						prev = os.path.join(directory, file)
+						y = int(x)
+				except ValueError:
+					file_count -= 1
+			if prev is None:
+				prev = self.textFileName
+			next = os.path.join(directory, videoFile + "_edited_" + str(file_count) + ".txt")
+			self.file = next
+			self.textFileName = prev
 		if not (self.textFileName is None or self.videoFileName is None):
 			self.openVideo()
+
+	def commitEdits(self):
+		self.addToDialog("Committing edits ...")
+		self.commitEdits1()
+
+	def commitEdits1(self):
+		f = open(self.file, "w+")
+		for frame in self.frames:
+			for i in sorted(frame.instances.keys()):
+				frameNum = int(frame.frameNum)
+				id = str(i)
+				box = self.allInstances[id].boxes[frameNum]
+				top_x, top_y, b_width, b_height = box['x1']/self.boxMult, box['y1']/self.boxMult, abs(box['x2']-box['x1'])/self.boxMult, abs(box['y2']-box['y1'])/self.boxMult
+				f.write(",".join([str(frameNum), id, str(top_x), str(top_y), str(b_width), str(b_height)]) + "\n")
+		f.close()
+		last = self.list_dialog.size() - 1
+		msg = self.list_dialog.get(last)[:-4] + ": Finished"
+		self.dialogCount -= 1
+		self.list_dialog.delete(last)
+		self.addToDialog(msg)
 
 	def openVideo(self):
 		self.video = cv2.VideoCapture(self.videoFileName)
@@ -488,8 +624,8 @@ class Annotator():
 		self.ori_width = self.video.get(cv2.CAP_PROP_FRAME_WIDTH)
 		self.img_height = int(self.img_width/self.ori_width*self.ori_height)
 		self.cvs_image.config(height=self.img_height)
-		self.canvas.config(height=self.img_height + self.top_two_bars + self.border)
-		self.window.minsize(self.width, self.img_height + self.top_two_bars + self.border)
+		self.canvas.config(height=self.img_height + self.dialog_height + self.border)
+		self.window.minsize(self.width, self.img_height + self.dialog_height + self.border)
 
 		# find box multipliers
 		self.boxMult = self.img_width / self.ori_width
@@ -574,6 +710,11 @@ class Annotator():
 	def loadNewFrame(self):
 		# reset elements
 		self.resetEditor() # should later be used to load new video
+		# grey-out dialog
+		last = self.list_dialog.size() - 1
+		for i in range(0, self.dialogCount):
+			self.list_dialog.itemconfig(last - i, fg="#383838")
+		self.dialogCount = 0
 
 		# load new image
 		if not self.displayedImage is None:
@@ -586,7 +727,7 @@ class Annotator():
 		removeInstances = []
 		if self.editorMode:
 			for id in self.allInstances:
-				self.listb_allIds.itemconfig(self.allInstances[id].index, bg='white')
+				self.list_ids.itemconfig(self.allInstances[id].index, bg='white')
 			for id in self.curr.instances.keys():
 				if id in self.idsHaveChanged:
 					if self.allInstances[id].boxes.get(self.curr.frameNum) is not None:
@@ -596,7 +737,7 @@ class Annotator():
 						continue
 				box = self.curr.instances[id]
 				self.boxes[id] = self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(box['color']), width=2)
-				self.listb_allIds.itemconfig(self.allInstances[id].index, bg=box['color'])
+				self.list_ids.itemconfig(self.allInstances[id].index, bg=box['color'])
 		else:
 			for id in self.curr.instances.keys():
 				if id in self.idsHaveChanged:
@@ -626,7 +767,7 @@ class Annotator():
 
 		if self.editorMode:
 			for id in self.curr.instances.keys():
-				self.listb_allIds.itemconfig(self.allInstances[id].index, bg='white')
+				self.list_ids.itemconfig(self.allInstances[id].index, bg='white')
 
 	def next(self):
 		if self.curr.frameNum == len(self.frames) - 1:
@@ -656,12 +797,6 @@ class Annotator():
 	def stop(self):
 		self.playing = False
 		self.stopEvent.set()
-
-	def commitEdits(self):
-		pass
-		# self.curr.commit() -- update self.curr.boxes to include the new boxes and identities
-		# self.frames[self.curr.frameNum - 1] = self.curr
-		# self.edited = False
 
 	def btn_next(self):
 		self.playing = False
