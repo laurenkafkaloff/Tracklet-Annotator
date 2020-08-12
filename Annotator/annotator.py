@@ -8,17 +8,19 @@ import os
 import shutil
 import math
 import copy
+import cv2
 
 from Annotator.frame import Frame
 from Annotator.instance import Instance
 from Annotator.colors import ColorSetter
-import cv2
+from Annotator.video import *
 
 class Annotator():
 	# TODO: Account for edge cases
 	# TODO: Update UI
+	# TODO: Load specified range of video
 	# NOTE: Export environment into github
-	# CASE: Opening a second video -- need to reset like everything
+	# CASE: Opening a second video -- need to reset everything
 
 	def __init__(self):
 	# Instance Variables
@@ -40,6 +42,16 @@ class Annotator():
 		self.tempCount = 0
 		self.fileProg = 0
 
+		self.checking = False
+		self.head = 0
+		self.tail = 0
+		self.fwdSize = 20
+		self.bkdSize = self.fwdSize
+		self.reloadBound = 10
+		self.fwdStop = True
+		self.bkdStop = True
+		self.stopChecker = False
+
 		# PLAYING VIDEO
 		self.textFileName = None
 		self.videoFileName = None
@@ -49,6 +61,7 @@ class Annotator():
 		self.frames = [Frame(frameNum=0)]
 		self.curr = Frame(frameNum=0)
 		self.displayedImage = None
+		self.boxes = {}
 
 		# BOUNDING BOXES / EDITOR
 		self.editorMode = False
@@ -68,10 +81,12 @@ class Annotator():
 		# TEXT FILES
 		self.frameswithboxes = []
 
+
 	# Display
 		# WINDOW
 		self.window = Tk()
 		self.window.title("Annotator")
+		self.window.wm_protocol("WM_DELETE_WINDOW", self.onClose)
 		width = self.window.winfo_screenwidth()
 		self.width = width
 		self.img_width = width - self.leftPanelWidth - self.border # border on right = 10
@@ -111,22 +126,6 @@ class Annotator():
 		# |    checkboxes    |       |
 		self.frm_main = tk.Frame(master=self.canvas, width=10)
 		self.frm_leftPanel = tk.Frame(master=self.frm_main)
-
-		# LEFT PANEL (frm)
-		# edit buttons
-			# Draw New Box -- choose id in side panel, draw new box
-			# Replace Box -- selectbox(), dialog = replace?, delete selected box, click again = draw new box
-			# Change ID -- selectbox(), dialog = choose new id, update curr.boxes
-				# selectbox() -- hover over box, highlight edge when over, click = select
-			# Delete Box -- selectbox(), confirm dialog, update left panel
-
-		# identities panel
-
-		# checkboxes
-			# Show Prev Frame Boxes -- checkbox (swaps to "hide")
-			# Show Next Frame Boxes -- checkbox (swaps to "hide") -- need in case bird enters frame but isn't detected immediately
-
-		# On next or finish drawing -- error if any boxes share an id, confirm boxes and curr.commitEdits
 
 		# edit buttons
 		self.frm_editor = tk.Frame(master=self.frm_leftPanel)
@@ -201,7 +200,6 @@ class Annotator():
 		self.rect = None
 		self.saveBox = None
 		self.topLevelOpen = False
-		self.boxes = {}
 		self.boxes_prev = {}
 		self.boxes_next = {}
 		self.curr_box = {"x1":0, "y1":0, "x2":0, "y2":0}
@@ -211,8 +209,10 @@ class Annotator():
 		self.secondId = None
 		self.p = tk.IntVar()
 		self.n = tk.IntVar()
-		self.prev_on = True
-		self.next_on = True
+		self.prev_on = False
+		self.next_on = False
+		self.showPrev()
+		self.showNext()
 		self.resetActions()
 
 	def resetActions(self):
@@ -246,7 +246,7 @@ class Annotator():
 			self.btn_commmit.grid(sticky=S+W, row=2, column=0)
 
 			self.loadNewFrame()
-			self.btn_editAndSave.config(text="CLOSE EDITOR & SAVE")
+			self.btn_editAndSave.config(text="CLOSE EDITOR")
 		else:
 			self.editorMode = False
 			self.btn_newBox.grid_forget()
@@ -539,9 +539,6 @@ class Annotator():
 		self.resetActions()
 
 	# CASES
-	def miniClose(self):
-		self.btn_cancel()
-
 	def key_esc(self, event):
 		self.drawing = False
 		if self.rect != None:
@@ -558,7 +555,7 @@ class Annotator():
 	# ON LOAD
 	def openDir(self):
 		folder = tk.filedialog.askdirectory(title = "Select directory with video and text file")
-		if folder is not "":
+		if folder != "":
 			videoFile = None
 			for file in os.listdir(folder):
 				if file.lower().endswith(".txt"):
@@ -589,33 +586,17 @@ class Annotator():
 		if not (self.textFileName is None or self.videoFileName is None):
 			self.openVideo()
 
-	def commitEdits(self):
-		self.addToDialog("Committing edits ...")
-		self.commitEdits1()
-
-	def commitEdits1(self):
-		f = open(self.file, "w+")
-		for frame in self.frames:
-			for i in sorted(frame.instances.keys()):
-				frameNum = int(frame.frameNum)
-				id = str(i)
-				box = self.allInstances[id].boxes[frameNum]
-				top_x, top_y, b_width, b_height = box['x1']/self.boxMult, box['y1']/self.boxMult, abs(box['x2']-box['x1'])/self.boxMult, abs(box['y2']-box['y1'])/self.boxMult
-				f.write(",".join([str(frameNum), id, str(top_x), str(top_y), str(b_width), str(b_height)]) + "\n")
-		f.close()
-		last = self.list_dialog.size() - 1
-		msg = self.list_dialog.get(last)[:-4] + ": Finished"
-		self.dialogCount -= 1
-		self.list_dialog.delete(last)
-		self.addToDialog(msg)
-
 	def openVideo(self):
 		self.video = cv2.VideoCapture(self.videoFileName)
-		self.lbl_header.config(text=self.videoFileName)
+		self.lbl_header.config(text="File: " + self.videoFileName.split("/")[-1])
 		self.setDimsAndMultipliers()
 		self.filling = True
 		self.fillFiles()
-		self.start()
+		self.checker = threading.Thread(target=checkThread, args=(self, ))
+		self.daemon = True
+		self.checking = True
+		self.checker.start()
+
 		self.window.update()
 
 	def setDimsAndMultipliers(self):
@@ -630,39 +611,34 @@ class Annotator():
 		# find box multipliers
 		self.boxMult = self.img_width / self.ori_width
 
-	def videoLoop(self):
-		try:
-			while not self.stopEvent.is_set():
-				if self.filling:
-					self.fillVideoNext()
-					# TODO: Load file (with progress) before video
-					# if self.fileProg != 100:
-					# 	print (self.fileProg)
-					# else:
-					# 	self.fillVideoNext()
-				else:
-					self.playing = True
-					self.next()
-		except RuntimeError as e:
-			print("[INFO] caught a RuntimeError")
+		# find video info
+		self.vid_fps = self.video.get(cv2.CAP_PROP_FPS)
+		self.vid_totalFrames =  self.video.get(cv2.CAP_PROP_FRAME_COUNT)
+		print(str(self.vid_totalFrames))
+		# self.vid_length = int(self.vid_totalFrames/self.vid_fps/1.0)
 
-	def fillVideoNext(self):
-		more, freeze = self.video.read()
-		self.tempCount += 1
-		if more:
-			self.img = self.frameToImage(freeze)
-			if self.tempCount >= len(self.frames): # file included no lines of instances on this frame
-				self.f = Frame(frameNum=self.tempCount, img=self.img)
-				self.frames.append(self.f)
-			else:
-				self.f = self.frames[self.tempCount]
-				self.f.img = self.img
-			self.loadNewBoxes()
-		else: # finished loading
-			self.stopEvent.set()
-			self.filling = False
-			self.curr = self.frames[1]
-			self.loadNewFrame()
+	def playThread(self):
+		while self.playing:
+			if not self.filling:
+				self.next()
+
+	# def fillVideoNext(self):
+	# 	more, freeze = self.video.read()
+	# 	self.tempCount += 1
+	# 	if more:
+	# 		self.img = frameToImage(self, freeze)
+	# 		if self.tempCount >= len(self.frames): # file included no lines of instances on this frame
+	# 			self.f = Frame(frameNum=self.tempCount, img=self.img)
+	# 			self.frames.append(self.f)
+	# 		else:
+	# 			self.f = self.frames[self.tempCount]
+	# 			self.f.img = self.img
+	# 		self.loadNewBoxes()
+	# 	else: # finished loading
+	# 		self.stopEvent.set()
+	# 		self.filling = False
+	# 		self.curr = self.frames[1]
+	# 		self.loadNewFrame(self.tempCount)
 
 	def fillFiles(self):
 		frm_index = 0
@@ -699,104 +675,114 @@ class Annotator():
 			# long term storage -- add box to an existing instance's list of boxes
 			self.allInstances[a_id].updateBoxes(box, self.frames[a_frame])
 
-	def loadNewBoxes(self):
-		instances = self.f.instances # { id: none }
+	def loadNewBoxes(self, frame=None):
+		if frame is None:
+			frame = self.curr.frameNum
+		f = self.frames[frame]
+		instances = f.instances # { id: none }
 		for id in instances.keys():
 			instance = self.allInstances[id]
-			box = instance.boxes[self.tempCount] # for each instance on the frame, get its corresponding box
+			box = instance.boxes[frame] # for each instance on the frame, get its corresponding box
 			box['color'] = instance.color
-			self.f.addInstance(id, box) # store box onto frame so you don't have to retreive it again
+			f.addInstance(id, box) # store box onto frame so you don't have to retreive it again
 
 	def loadNewFrame(self):
-		# reset elements
-		self.resetEditor() # should later be used to load new video
-		# grey-out dialog
-		last = self.list_dialog.size() - 1
-		for i in range(0, self.dialogCount):
-			self.list_dialog.itemconfig(last - i, fg="#383838")
-		self.dialogCount = 0
+		# new image
+		if self.displayedImage is None:
+			self.displayedImage = self.cvs_image.create_image(0, 0, anchor="nw", image=self.curr.img)
+		else:
+			# self.cvs_image.delete(self.displayedImage)
+			# self.displayedImage = self.cvs_image.create_image(0, 0, anchor="nw", image = self.curr.img)
+			self.cvs_image.itemconfig(self.displayedImage, image = self.curr.img)
 
-		# load new image
-		if not self.displayedImage is None:
-			self.cvs_image.delete(self.displayedImage)
-		self.displayedImage = self.cvs_image.create_image(0, 0, anchor="nw", image=self.curr.img)
-		# load new frame number
+		# new frame number
 		self.lbl_frameNum.config(text="Frame Number: " + str(self.curr.frameNum))
-		# load in boxes
-		box = None
-		removeInstances = []
+
+		# udpate identity panel
 		if self.editorMode:
 			for id in self.allInstances:
 				self.list_ids.itemconfig(self.allInstances[id].index, bg='white')
-			for id in self.curr.instances.keys():
-				if id in self.idsHaveChanged:
-					if self.allInstances[id].boxes.get(self.curr.frameNum) is not None:
-						self.curr.addInstance(id, self.allInstances[id].boxes[self.curr.frameNum])
-					else:
-						removeInstances.append(id)
-						continue
-				box = self.curr.instances[id]
-				self.boxes[id] = self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(box['color']), width=2)
+
+		# reset elements
+		for id in self.boxes.keys():
+			self.cvs_image.delete(self.boxes[id])
+		self.boxes = {}
+
+		# new boxes
+		box = None
+		removeInstances = []
+		for id in self.curr.instances.keys():
+			if id in self.idsHaveChanged:
+				if self.allInstances[id].boxes.get(self.curr.frameNum) is not None:
+					self.curr.addInstance(id, self.allInstances[id].boxes[self.curr.frameNum])
+				else:
+					removeInstances.append(id)
+					continue
+			box = self.curr.instances[id]
+			self.boxes[id] = self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(box['color']), width=2)
+			if self.editorMode:
 				self.list_ids.itemconfig(self.allInstances[id].index, bg=box['color'])
-		else:
-			for id in self.curr.instances.keys():
-				if id in self.idsHaveChanged:
-					if self.allInstances[id].boxes.get(self.curr.frameNum) is not None:
-						self.curr.addInstance(id, self.allInstances[id].boxes[self.curr.frameNum])
-					else:
-						removeInstances.append(id)
-						continue
-				box = self.curr.instances[id]
-				self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(box['color']), width=2)
 		for id in removeInstances:
 			self.curr.removeInstance(id)
 
-	def frameToImage(self, freeze):
-		rgb = cv2.cvtColor(freeze, cv2.COLOR_BGR2RGB)
-		img = Image.fromarray(rgb)
-		imgResized = img.resize((self.img_width, self.img_height), Image.NEAREST)
-		return ImageTk.PhotoImage(imgResized)
+	# def frameToImage(self, freeze):
+	# 	rgb = cv2.cvtColor(freeze, cv2.COLOR_BGR2RGB)
+	# 	img = Image.fromarray(rgb)
+	# 	imgResized = img.resize((self.img_width, self.img_height), Image.NEAREST)
+	# 	return ImageTk.PhotoImage(imgResized)
 
 	# PLAYING VIDEO
 	def onLeavingFrame(self):
 		if not self.playing:
 			self.stop()
 
-		if self.edited:
-			commitEdits()
+		# grey-out dialog
+		last = self.list_dialog.size() - 1
+		for i in range(0, self.dialogCount):
+			self.list_dialog.itemconfig(last - i, fg="#383838")
+		self.dialogCount = 0
 
-		if self.editorMode:
-			for id in self.curr.instances.keys():
-				self.list_ids.itemconfig(self.allInstances[id].index, bg='white')
+		self.resetEditor()
 
 	def next(self):
-		if self.curr.frameNum == len(self.frames) - 1:
-			return
+		if self.curr.frameNum < len(self.frames) - 1:
+			if (self.frames[self.curr.frameNum + 1].img is None):
+				self.filling = True
 
-		self.onLeavingFrame()
-		self.curr = self.frames[self.curr.frameNum + 1]
-
-		self.loadNewFrame()
-		time.sleep(.01) # NOTE: Change sleep into a function of fps
+			self.checking = True
+			# while self.filling:
+			# 	time.sleep(.5)
+			self.onLeavingFrame()
+			self.curr = self.frames[self.curr.frameNum + 1]
+			self.loadNewFrame()
+			self.checking = True
+			time.sleep(.001) # NOTE: Change sleep into a function of fps
+		else:
+			self.stop()
+			self.addToDialog("Already on last frame")
 
 	def prev(self):
-		self.onLeavingFrame()
 		if self.curr.frameNum > 1:
+			self.onLeavingFrame()
 			self.curr = self.frames[self.curr.frameNum - 1]
 			self.loadNewFrame()
+			self.checking = True
+		else:
+			self.addToDialog("Already on first frame")
 
 	def start(self):
 		if not self.video is None:
-			self.stopEvent.clear()
-			self.thread = threading.Thread(target=self.videoLoop, args=())
-			self.thread.start()
+			if not self.filling and not self.playing:
+				self.playing = True
+				self.thread = threading.Thread(target=self.playThread, args=())
+				self.thread.start()
+
 
 			# NOTE: Set a callback to handle when the window is closed
 			# self.window.wm_protocol("WM_DELETE_WINDOW", self.onClose)
 
 	def stop(self):
 		self.playing = False
-		self.stopEvent.set()
 
 	def btn_next(self):
 		self.playing = False
@@ -806,11 +792,31 @@ class Annotator():
 		self.playing = False
 		self.prev()
 
+	def commitEdits(self):
+		self.addToDialog("Committing edits ...")
+		self.commitEdits1()
+
+	def commitEdits1(self):
+		f = open(self.file, "w+")
+		for frame in self.frames:
+			for i in sorted(frame.instances.keys()):
+				frameNum = int(frame.frameNum)
+				id = str(i)
+				box = self.allInstances[id].boxes[frameNum]
+				top_x, top_y, b_width, b_height = box['x1']/self.boxMult, box['y1']/self.boxMult, abs(box['x2']-box['x1'])/self.boxMult, abs(box['y2']-box['y1'])/self.boxMult
+				f.write(",".join([str(frameNum), id, str(top_x), str(top_y), str(b_width), str(b_height)]) + "\n")
+		f.close()
+		last = self.list_dialog.size() - 1
+		msg = self.list_dialog.get(last)[:-4] + ": Finished"
+		self.dialogCount -= 1
+		self.list_dialog.delete(last)
+		self.addToDialog(msg)
 
 	# WINDOW CASES
 	def onClose(self):
 		# NOTE: Save everything before closing entire window
-		self.stop()
+		self.stopChecker = True
+		self.window.destroy()
 
 		# NOTE: Only load specified range of frames
 		# LOAD A SPECIFIED RANGE OF FRAMES AHEAD OF TIME -- WHEN SWAPPINNG IDS, DON'T LOAD PAST THIS EITHER
