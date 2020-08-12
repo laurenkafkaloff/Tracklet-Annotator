@@ -37,50 +37,9 @@ class Annotator():
 		self.displayedIdent1Height = 15
 		self.displayedIdent2Height = 15
 
-		# FILLING VIDEO
-		self.filling = False
-		self.tempCount = 0
-		self.fileProg = 0
-
-		self.checking = False
-		self.head = 0
-		self.tail = 0
-		self.fwdSize = 20
-		self.bkdSize = self.fwdSize
-		self.reloadBound = 10
-		self.fwdStop = True
-		self.bkdStop = True
-		self.stopChecker = False
-
-		# PLAYING VIDEO
 		self.textFileName = None
 		self.videoFileName = None
-		self.video = None
-		self.stopEvent = threading.Event()
-		self.playing = False
-		self.frames = [Frame(frameNum=0)]
-		self.curr = Frame(frameNum=0)
-		self.displayedImage = None
-		self.boxes = {}
-
-		# BOUNDING BOXES / EDITOR
-		self.editorMode = False
-		self.minBoxSize = 10
-		self.selectingBoxThreshold = 100
-
-		# IDENTITIES
-		self.lastSelectedId = None
-		self.allInstances = {} # { id : instance }
-		self.colorSetter = ColorSetter()
-		self.idsHaveChanged = []
-		self.maxId = -1
-
-		# DIALOG
-		self.dialogCount = 0
-
-		# TEXT FILES
-		self.frameswithboxes = []
-
+		self.checker = None
 
 	# Display
 		# WINDOW
@@ -194,6 +153,40 @@ class Annotator():
 		self.canvas.grid_columnconfigure(2, weight=1, minsize=self.dialog_width)
 		self.canvas.pack()
 		self.window.mainloop()
+
+	def resetVariables(self):
+		# FILLING VIDEO
+		self.filling = False
+		self.tempCount = 0
+		self.fileProg = 0
+		self.checking = False
+		self.head = 0
+		self.tail = 0
+		self.fwdSize = 20
+		self.bkdSize = self.fwdSize
+		self.reloadBound = 10
+		self.fwdStop = True
+		self.bkdStop = True
+		self.stopChecker = False
+		# PLAYING VIDEO
+		self.video = None
+		self.stopEvent = threading.Event()
+		self.playing = False
+		self.frames = [Frame(frameNum=0)]
+		self.curr = Frame(frameNum=0)
+		self.displayedImage = None
+		self.boxes = {}
+		# BOUNDING BOXES / EDITOR
+		self.editorMode = False
+		self.minBoxSize = 10
+		# IDENTITIES
+		self.lastSelectedId = None
+		self.allInstances = {} # { id : instance }
+		self.colorSetter = ColorSetter()
+		self.idsHaveChanged = []
+		self.maxId = -1
+		# DIALOG
+		self.dialogCount = 0
 
 	def resetEditor(self):
 		self.edited = False
@@ -584,6 +577,9 @@ class Annotator():
 			self.file = next
 			self.textFileName = prev
 		if not (self.textFileName is None or self.videoFileName is None):
+			self.resetEditor()
+			self.resetVariables()
+			self.cvs_image.delete('all')
 			self.openVideo()
 
 	def openVideo(self):
@@ -592,8 +588,10 @@ class Annotator():
 		self.setDimsAndMultipliers()
 		self.filling = True
 		self.fillFiles()
+		if self.checker is not None:
+			self.stopChecker = True
 		self.checker = threading.Thread(target=checkThread, args=(self, ))
-		self.daemon = True
+		self.checker.daemon = True
 		self.checking = True
 		self.checker.start()
 
@@ -621,24 +619,6 @@ class Annotator():
 		while self.playing:
 			if not self.filling:
 				self.next()
-
-	# def fillVideoNext(self):
-	# 	more, freeze = self.video.read()
-	# 	self.tempCount += 1
-	# 	if more:
-	# 		self.img = frameToImage(self, freeze)
-	# 		if self.tempCount >= len(self.frames): # file included no lines of instances on this frame
-	# 			self.f = Frame(frameNum=self.tempCount, img=self.img)
-	# 			self.frames.append(self.f)
-	# 		else:
-	# 			self.f = self.frames[self.tempCount]
-	# 			self.f.img = self.img
-	# 		self.loadNewBoxes()
-	# 	else: # finished loading
-	# 		self.stopEvent.set()
-	# 		self.filling = False
-	# 		self.curr = self.frames[1]
-	# 		self.loadNewFrame(self.tempCount)
 
 	def fillFiles(self):
 		frm_index = 0

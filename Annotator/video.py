@@ -10,16 +10,19 @@ def frameToImage(self, freeze):
     return ImageTk.PhotoImage(imgResized)
 
 def checkThread(self):
+    self.head = 0
+    self.tail = 0
     while True:
         if self.stopChecker:
+            self.stopChecker = False
             break
         if self.checking:
-            print(f"tail: {self.tail}   curr: {self.curr.frameNum}   head: {self.head}   fwd: {self.fwdStop}   bkd: {self.bkdStop}")
+            # print(f"tail: {self.tail}   curr: {self.curr.frameNum}   head: {self.head}   fwd: {self.fwdStop}   bkd: {self.bkdStop}")
             self.checking = False
             num = self.curr.frameNum
             # NEXT CLICK
             # shift window head forward one frame
-            while self.head - num < self.fwdSize and self.head < self.vid_totalFrames:
+            while self.head - num < self.fwdSize and self.head < self.vid_totalFrames - 1:
                 # print(f"head: {self.head}   curr: {num}")
                 more, freeze = self.video.read()
                 if more:
@@ -32,7 +35,9 @@ def checkThread(self):
                         self.f = self.frames[self.head]
                         self.f.img = self.img
                     self.loadNewBoxes(self.head)
-            self.filling = False
+            if self.filling:
+                self.filling = False
+                self.next()
 
             # for frm in self.frames:
             #     print(str(frm.frameNum) + ": " + str(frm.img is None))
