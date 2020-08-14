@@ -63,11 +63,11 @@ class Annotator():
 
 		# 				     CANVAS
 		#   LEFT PANEL (frm)           MAIN FRAME
-		# |   edit boxes     | Header | Play Btns | Dialog |
-		# |   edit labels    |	         LABEL			   |
-		# | identity panel   | 			 image 			   |
-		# |   checkboxes     |       	play bar		   |
-		# |   commit edits   |       					   |
+		# |   edit boxes     | Header | Play Btns | Dialog
+		# |   edit labels    |	         LABEL			   
+		# | identity panel   | 			 image
+		# |   checkboxes     |       	play bar
+		# |   commit edits   |
 
 		col_leftPanel = '#bebfc1'
 		col_main = '#bebfc1'
