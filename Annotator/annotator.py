@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter.ttk import *
 from tkinter import *
 from tkinter import filedialog, simpledialog
 from PIL import ImageTk,Image
@@ -17,22 +18,22 @@ from Annotator.video import *
 
 class Annotator():
 	# TODO: Account for edge cases
-	# TODO: Update UI
 	# TODO: Load specified range of video
 	# NOTE: Export environment into github
-	# CASE: Opening a second video -- need to reset everything
 
 	def __init__(self):
 	# Instance Variables
 		# DISPLAY
-		self.width, self.height = 960, 600 # width overwritten by screensize
+		self.width, self.height = 960, 770 # width overwritten by screensize
 		self.border = 10
 		self.dialog_height = 45
 		self.dialog_width = 600
+		self.playBar_height = 55
 		self.leftPanelWidth = 200
-		self.leftPanelHeight_Row0 = 200
+		self.leftPanelHeight_Editor = 170
 		self.leftPanelHeight_Row1 = 10
 		self.leftPanelHeight_Row2 = 50
+		self.leftPanelHeight_Labeler = 120
 
 		self.displayedIdent1Height = 15
 		self.displayedIdent2Height = 15
@@ -40,92 +41,136 @@ class Annotator():
 		self.textFileName = None
 		self.videoFileName = None
 		self.checker = None
+		self.firstVideo = True
+		self.playThread = None
+		self.bar = None
+		self.bar_head = None
+		self.bar_tail = None
+		self.bar_id = None
 
 	# Display
 		# WINDOW
 		self.window = Tk()
 		self.window.title("Annotator")
 		self.window.wm_protocol("WM_DELETE_WINDOW", self.onClose)
-		width = self.window.winfo_screenwidth()
+		width = self.window.winfo_screenwidth() - 150
 		self.width = width
 		self.img_width = width - self.leftPanelWidth - self.border # border on right = 10
-
-		self.canvas = Canvas(master=self.window, width=self.width, height=self.height, relief='flat')
 		self.window.minsize(self.width, self.height)
+		self.window.geometry(f"{self.width}x{self.height}")
 
-		self.resetEditor()
+		self.resetVariables()
 
-		# HEADER
-		self.lbl_header = tk.Label(master=self.canvas,text="No file loaded")
-		self.lbl_frameNum = tk.Label(master=self.canvas,text=" Frame Number: ")
+		# 				     CANVAS
+		#   LEFT PANEL (frm)           MAIN FRAME
+		# |   edit boxes     | Header | Play Btns | Dialog |
+		# |   edit labels    |	         LABEL			   |
+		# | identity panel   | 			 image 			   |
+		# |   checkboxes     |       	play bar		   |
+		# |   commit edits   |       					   |
 
-		# TOOLBAR
-		self.frm_toolbar = tk.Frame(master=self.canvas, height=10)
-		self.btn_open = tk.Button(master=self.frm_toolbar, text="Open File", command=self.openDir)
-		self.btn_next = tk.Button(master=self.frm_toolbar, text="Next Frame", command=self.btn_next)
-		self.btn_prev = tk.Button(master=self.frm_toolbar, text="Prev Frame", command=self.btn_prev)
-		self.btn_start = tk.Button(master=self.frm_toolbar, text="Start", command=self.start)
-		self.btn_stop = tk.Button(master=self.frm_toolbar, text="Stop", command=self.stop)
-		self.btn_open.grid(row=0, column=0)
-		self.btn_next.grid(row=0, column=1)
-		self.btn_prev.grid(row=0, column=2)
-		self.btn_start.grid(row=0, column=3)
-		self.btn_stop.grid(row=0, column=4)
-		self.frm_toolbar.grid(row=1, column=0)
+		col_leftPanel = '#bebfc1'
+		col_main = '#bebfc1'
+		self.col_light ='#F0F0F0'
 
-		# DIALOG
-		self.list_dialog = tk.Listbox(master=self.canvas, borderwidth=6, relief="flat", height=int(self.dialog_height/8), width=int(self.dialog_width/8), fg="white", bg='black', activestyle="none", font="Courier 11", selectforeground="lightpink", selectbackground="Black")
-		# Main Elements
-		#    Header    |  Scrolling
-		#	Tool Bar   |   Dialog
-		#            Main Frame
-		#   LEFT PANEL (frm)   LABEL
-		# |   edit buttons   | image |
-		# | identities panel |       |
-		# |    checkboxes    |       |
-		self.frm_main = tk.Frame(master=self.canvas, width=10)
-		self.frm_leftPanel = tk.Frame(master=self.frm_main)
 
-		# edit buttons
+		# BASE
+		self.canvas = Canvas(master=self.window, width=self.width, height=self.height, relief='flat', bg=col_main, highlightthickness=0)
+		self.frm_main = tk.Frame(master=self.canvas, bg=col_main)
+		self.frm_main.grid_columnconfigure(0, weight=1)
+		self.frm_main.grid_rowconfigure(2, minsize=self.playBar_height)
+		self.frm_leftPanel = tk.Frame(master=self.canvas, border=7)
+
+		self.frm_leftPanel.grid(row=0, column=0, sticky='nsw')
+		self.frm_main.grid(row=0, column=1, sticky="nswe")
+		self.canvas.grid_columnconfigure(0, weight=1, minsize=self.leftPanelWidth)
+		self.canvas.grid_columnconfigure(1, weight=1, minsize=self.width - self.leftPanelWidth)
+
+		# LEFT PANEL
+		# Edit Boxes
 		self.frm_editor = tk.Frame(master=self.frm_leftPanel)
-		self.btn_editAndSave = tk.Button(master=self.frm_editor, text="OPEN EDITOR", command=self.editAndSave, width=int(self.leftPanelWidth/10))
+		self.lbl_editorHeader = tk.Label(master=self.frm_editor, text="Box Editor", bg=col_leftPanel, width=int(self.leftPanelWidth/10))
 		self.btn_newBox = tk.Button(master=self.frm_editor, text="Create new box", command=self.newBox)
 		self.btn_deleteBox = tk.Button(master=self.frm_editor, text="Delete box", command=self.deleteBox)
 		self.btn_redrawBox = tk.Button(master=self.frm_editor, text="Redraw box", command=self.redrawBox)
 		self.btn_changeId = tk.Button(master=self.frm_editor, text="Change box ID + Tracklet", command=self.changeId)
-		self.btn_editAndSave.grid(sticky=N+W, row=0, column=0)
-		self.frm_editor.grid(sticky=N+W, row=0, column=0)
-
-		# identities panel
-		self.frm_identities = tk.Frame(master=self.frm_leftPanel)
-		self.lbl_allidheader = tk.Label(master=self.frm_identities, text=" All Identities")
-		self.btn_newId = tk.Button(master=self.frm_identities, text="New ID", command=self.newId)
-		self.list_ids = tk.Listbox(master=self.frm_identities, borderwidth=6, relief="flat", height=2 * self.leftPanelHeight_Row1, selectforeground="white", selectbackground="Black", activestyle="underline")
-
-		# checkboxes
+		self.lbl_editorHeader.grid(sticky=N+W, row=0, column=0)
+		self.btn_newBox.grid(sticky=S+W, row=1, column=0)
+		self.btn_deleteBox.grid(sticky=S+W, row=2, column=0)
+		self.btn_redrawBox.grid(sticky=S+W,row=3, column=0)
+		self.btn_changeId.grid(sticky=S+W, row=4, column=0)
+		# Edit Labels
+		self.frm_labeler = tk.Frame(master=self.frm_leftPanel)
+		self.lbl_labelerHeader = tk.Label(master=self.frm_labeler, text="Label Editor", bg=col_leftPanel, width=int(self.leftPanelWidth/10))
+		self.btn_label1 = tk.Button(master=self.frm_labeler, text="Button One", command=self.deleteBox)
+		self.btn_label2 = tk.Button(master=self.frm_labeler, text="Button Two", command=self.redrawBox)
+		self.lbl_labelerHeader.grid(sticky=N+W, row=0, column=0)
+		self.btn_label1.grid(sticky=S+W,row=1, column=0)
+		self.btn_label2.grid(sticky=S+W, row=2, column=0)
+		# Identity Panel
+		self.frm_identities = tk.Frame(master=self.frm_leftPanel, bg=col_leftPanel)
+		self.lbl_allidheader = tk.Label(master=self.frm_identities, text=" All Identities", bg=col_leftPanel)
+		self.btn_newId = tk.Button(master=self.frm_identities, text="New ID", command=self.newId, highlightbackground=col_leftPanel, border=3)
+		self.list_ids = tk.Listbox(master=self.frm_identities, borderwidth=6, relief="flat", height=2 * self.leftPanelHeight_Row1, bg=self.col_light, selectforeground="blue", selectbackground=col_main, activestyle="underline")
+		self.lbl_allidheader.grid(sticky=W+E, row=0, column=0)
+		self.btn_newId.grid(sticky=N+E, row=0, column=1)
+		self.list_ids.grid(sticky=N+W, row=1, column=0, columnspan = 2)
+		# Checkboxes and commit
 		self.frm_checkboxes = tk.Frame(master=self.frm_leftPanel)
 		self.ckb_prev = tk.Checkbutton(master=self.frm_checkboxes, text="Show Previous Boxes", variable = self.p, command = self.showPrev)
 		self.ckb_next = tk.Checkbutton(master=self.frm_checkboxes, text="Show Next Boxes", variable = self.n, command = self.showNext)
 		self.btn_commmit = tk.Button(master=self.frm_checkboxes, text="Commit Edits", command=self.commitEdits)
+		self.ckb_prev.grid(sticky=S+W, row=0, column=0)
+		self.ckb_next.grid(sticky=S+W, row=1, column=0)
+		self.btn_commmit.grid(sticky=S+W, row=2, column=0)
+		# Place
+		self.frm_editor.grid(sticky=N+W, row=0, column=0)
+		self.frm_labeler.grid(sticky=N+W, row=1, column=0)
+		self.frm_identities.grid(sticky=N+W, row=2, column=0)
+		self.frm_checkboxes.grid(sticky=S+W, row=3, column=0)
+		self.frm_leftPanel.grid_rowconfigure(0, minsize=self.leftPanelHeight_Editor)
+		self.frm_leftPanel.grid_rowconfigure(1, minsize=self.leftPanelHeight_Labeler)
 
-		# format
-		self.frm_leftPanel.grid_rowconfigure(0, minsize=self.leftPanelHeight_Row0)
-		self.frm_leftPanel.grid_rowconfigure(1, minsize=self.leftPanelHeight_Row1)
-		self.frm_leftPanel.grid_rowconfigure(2, minsize=self.leftPanelHeight_Row2)
+		# MAIN FRAME
+		# Header
+		self.frm_toolbar = tk.Frame(master=self.frm_main, bg=col_main)
+		self.btn_open = tk.Button(master=self.frm_toolbar, text="Open File", command=self.openDir, highlightbackground=col_main, borderwidth=6)
+		self.lbl_fileLoaded = tk.Label(master=self.frm_toolbar, text="  No file loaded", bg=col_main)
+		self.lbl_fileFrames = tk.Label(master=self.frm_toolbar, text="  Total frames: ", bg=col_main)
+		# self.lbl_fileTime = tk.Label(master=self.frm_toolbar, text="  Total length: ", bg=col_main)
+		self.btn_open.grid(row=0, column=0, sticky=SW)
+		self.lbl_fileLoaded.grid(row=1, column=0, sticky=NW)
+		self.lbl_fileFrames.grid(row=2, column=0, sticky=NW)
+		# self.lbl_fileTime.grid(row=3, column=0, sticky=NW)
+		# Play Btns
+		self.btn_next = tk.Button(master=self.frm_toolbar, text="Next Frame", command=self.btn_next, highlightbackground=col_main)
+		self.btn_prev = tk.Button(master=self.frm_toolbar, text="Prev Frame", command=self.btn_prev, highlightbackground=col_main)
+		self.btn_start = tk.Button(master=self.frm_toolbar, text="Start", command=self.playBtn, highlightbackground=col_main)
+		self.btn_next.grid(row=0, column=1, sticky=SE)
+		self.btn_prev.grid(row=1, column=1, sticky=NE)
+		self.btn_start.grid(row=2, column=1, sticky=NE)
+		# Dialog
+		self.list_dialog = tk.Listbox(master=self.frm_toolbar, borderwidth=6, relief="flat", height=int(self.dialog_height/7), width=int(self.dialog_width/8), fg="black", bg=self.col_light, activestyle="none", font="Courier 11", selectforeground="blue", selectbackground=self.col_light)
+		self.list_dialog.grid(row=0, column=2, rowspan=3, sticky=NE)
+		# Image
+		self.cvs_image = tk.Canvas(master=self.frm_main, width = self.width, height=self.height - 160, bg=col_main, highlightthickness=0, border=6)
+		# Play Bar
+		self.cvs_playBar = tk.Canvas(master=self.frm_main, width = self.width - self.leftPanelWidth, height=self.playBar_height, bg=col_main, highlightthickness=0, border=3)
+		# Place
+		self.frm_toolbar.grid_columnconfigure(0, minsize=300)
+		self.frm_toolbar.grid_columnconfigure(1, minsize=300)
+		self.frm_toolbar.grid_columnconfigure(2, minsize=self.width-800)
+		self.frm_toolbar.grid(row=0, column=0, sticky=N+W+E)
+		self.cvs_image.grid(row=1, column=0, sticky=N+W+E)
+		self.cvs_playBar.grid(row=2, column=0, sticky=S+W+E, pady=0)
 
 
-		# LABEL
-		self.cvs_image = tk.Canvas(master=self.frm_main, width = self.width, height=self.height)
+		self.lbl_frameNum = tk.Label(master=self.frm_main,text=" Frame Number: ")
 
-		self.frm_leftPanel.grid(row=0, column=0, sticky='nsew')
-		self.cvs_image.grid(row=0,column=1, sticky='nsew')
-		self.frm_main.grid_columnconfigure(0, minsize=self.leftPanelWidth)
-
-
-	# Bindings
 		# PLAYING VIDEO
 		self.window.bind('<Left>', self.leftkey)
 		self.window.bind('<Right>', self.rightkey)
+		self.window.bind('<space>', self.space)
 
 		# BOUNDING BOXES
 		# NOTE: Add undo button binding
@@ -142,15 +187,9 @@ class Annotator():
 		self.list_ids.bind('<<ListboxSelect>>', self.clickId)
 		self.list_dialog.bind('<<ListboxSelect>>', self.doNothing)
 
-	# Show
-		self.lbl_header.grid(row=0, column=1, sticky=N)
-		self.lbl_frameNum.grid(row=1, column=1, sticky=S)
-		self.frm_toolbar.grid(row=2, column=1, sticky=N)
-		self.list_dialog.grid(row=0, column=2, rowspan=3, sticky=E)
-		self.frm_main.grid(row=3, column=0, columnspan=3)
-		self.canvas.grid_columnconfigure(0, weight=1, minsize=self.leftPanelWidth)
-		self.canvas.grid_columnconfigure(1, weight=1)
-		self.canvas.grid_columnconfigure(2, weight=1, minsize=self.dialog_width)
+		self.resetEditor()
+		self.resetActions()
+
 		self.canvas.pack()
 		self.window.mainloop()
 
@@ -163,30 +202,33 @@ class Annotator():
 		self.head = 0
 		self.tail = 0
 		self.fwdSize = 20
-		self.bkdSize = self.fwdSize
-		self.reloadBound = 10
+		self.bkdSize = 30
+		self.reloadBound = 20
 		self.fwdStop = True
 		self.bkdStop = True
 		self.stopChecker = False
+		self.stopper = False
 		# PLAYING VIDEO
 		self.video = None
-		self.stopEvent = threading.Event()
 		self.playing = False
 		self.frames = [Frame(frameNum=0)]
 		self.curr = Frame(frameNum=0)
 		self.displayedImage = None
 		self.boxes = {}
+		self.p = tk.IntVar()
+		self.n = tk.IntVar()
 		# BOUNDING BOXES / EDITOR
-		self.editorMode = False
 		self.minBoxSize = 10
 		# IDENTITIES
-		self.lastSelectedId = None
 		self.allInstances = {} # { id : instance }
 		self.colorSetter = ColorSetter()
 		self.idsHaveChanged = []
 		self.maxId = -1
 		# DIALOG
 		self.dialogCount = 0
+
+		if self.bar is not None:
+			self.cvs_playBar.delete('all')
 
 	def resetEditor(self):
 		self.edited = False
@@ -200,13 +242,11 @@ class Annotator():
 		self.active_id = None
 		self.firstId = None
 		self.secondId = None
-		self.p = tk.IntVar()
-		self.n = tk.IntVar()
+		self.lastSelectedId = None
 		self.prev_on = False
 		self.next_on = False
 		self.showPrev()
 		self.showNext()
-		self.resetActions()
 
 	def resetActions(self):
 		self.drawing = False
@@ -217,40 +257,10 @@ class Annotator():
 		self.changingId = False
 		self.gettingSecondId = False
 		self.waitingForClick = False
+		self.openingVideo = False
+		self.shifting = False
 
 # EDITOR MODE
-	# OPEN EDITOR
-	def editAndSave(self):
-		if not self.editorMode:
-			self.editorMode = True
-			self.btn_newBox.grid(sticky=N+W, row=1, column=0)
-			self.btn_deleteBox.grid(sticky=N+W, row=2, column=0)
-			self.btn_redrawBox.grid(sticky=N+W,row=3, column=0)
-			self.btn_changeId.grid(sticky=N+W, row=4, column=0)
-
-			self.frm_identities.grid(sticky=N+W, row=1, column=0)
-			self.lbl_allidheader.grid(sticky=S+W, row=0, column=0)
-			self.btn_newId.grid(sticky=N+E, row=0, column=1)
-			self.list_ids.grid(sticky=N+W, row=1, column=0, columnspan = 2)
-
-			self.frm_checkboxes.grid(sticky=S+W, row=2, column=0)
-			self.ckb_prev.grid(sticky=S+W, row=0, column=0)
-			self.ckb_next.grid(sticky=S+W, row=1, column=0)
-			self.btn_commmit.grid(sticky=S+W, row=2, column=0)
-
-			self.loadNewFrame()
-			self.btn_editAndSave.config(text="CLOSE EDITOR")
-		else:
-			self.editorMode = False
-			self.btn_newBox.grid_forget()
-			self.btn_redrawBox.grid_forget()
-			self.btn_changeId.grid_forget()
-			self.btn_deleteBox.grid_forget()
-
-			self.frm_identities.grid_forget()
-			self.frm_checkboxes.grid_forget()
-			self.btn_editAndSave.config(text="OPEN EDITOR")
-
 	def showPrev(self):
 		if self.prev_on:
 			self.prev_on = False
@@ -284,6 +294,8 @@ class Annotator():
 	# LEFT PANEL BUTTONS
 	# TODO: Esc undoes all button presses
 	def newBox(self):
+		if self.firstVideo:
+			return
 		self.resetActions()
 		if not self.boxes.get(self.lastSelectedId) is None:
 			self.setNaturalBox(self.lastSelectedId)
@@ -291,6 +303,8 @@ class Annotator():
 		self.newingBox = True
 
 	def deleteBox(self):
+		if self.firstVideo:
+			return
 		self.resetActions()
 		if not self.boxes.get(self.lastSelectedId) is None:
 			self.setNaturalBox(self.lastSelectedId)
@@ -299,6 +313,8 @@ class Annotator():
 		self.selectBox()
 
 	def redrawBox(self):
+		if self.firstVideo:
+			return
 		self.resetActions()
 		if not self.boxes.get(self.lastSelectedId) is None:
 			self.setNaturalBox(self.lastSelectedId)
@@ -307,6 +323,8 @@ class Annotator():
 		self.selectBox()
 
 	def changeId(self):
+		if self.firstVideo:
+			return
 		self.resetActions()
 		if not self.boxes.get(self.lastSelectedId) is None:
 			self.setNaturalBox(self.lastSelectedId)
@@ -330,6 +348,8 @@ class Annotator():
 		self.active_id = None
 
 	def newId(self, a_id=None):
+		if self.firstVideo:
+			return
 		if a_id is None:
 			self.maxId = self.maxId + 1
 			a_id = str(self.maxId)
@@ -345,7 +365,7 @@ class Annotator():
 
 	def addToDialog(self, text, clickToConfirm=False):
 		if self.dialogCount > 0:
-			self.list_dialog.itemconfig(self.list_dialog.size() - 1, fg="grey")
+			self.list_dialog.itemconfig(self.list_dialog.size() - 1, fg='#505050')
 		self.list_dialog.insert(END, text)
 		if clickToConfirm:
 			self.waitingForClick = True
@@ -366,14 +386,22 @@ class Annotator():
 		self.list_dialog.delete(last - 2)
 		self.addToDialog(msg)
 
-		if self.redrawing or self.newingBox:
+		if self.openingVideo:
+			self.commitEdits()
+			self.resetEditor()
+			self.resetVariables()
+			self.cvs_image.delete('all')
+			if self.list_ids.size() != 0:
+				self.list_ids.delete('0','end')
+			openVideo(self)
+
+		elif self.redrawing or self.newingBox:
 			self.cvs_image.delete(self.rect)
 
 		elif self.deletingBox:
 			self.allInstances[self.curr_id].boxes.pop(self.curr.frameNum)
 			self.curr.instances.pop(self.curr_id)
 			self.updateTempFrame(str(self.curr_id))
-
 
 		self.matchCurrBoxAndId()
 		self.resetActions()
@@ -387,10 +415,18 @@ class Annotator():
 		self.addToDialog(msg)
 		self.waitingForClick = False
 
+		if self.openingVideo:
+			self.resetEditor()
+			self.resetVariables()
+			self.cvs_image.delete('all')
+			if self.list_ids.size() != 0:
+				self.list_ids.delete('0','end')
+			openVideo(self)
+
 		if self.redrawing or self.newingBox:
 			if self.redrawing:
 				box = self.allInstances[str(self.curr_id)].boxes[self.curr.frameNum]
-				self.boxes[str(self.curr_id)] = self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(box['color']), width=2)
+				self.boxes[str(self.curr_id)] = self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(box['color']), width=3)
 			self.cvs_image.delete(self.rect)
 			self.rect = None
 
@@ -407,6 +443,8 @@ class Annotator():
 		if not self.boxes.get(self.lastSelectedId) is None:
 			self.setNaturalBox(self.lastSelectedId)
 		w = event.widget
+		if w.curselection() == ():
+			return
 		index = int(w.curselection()[0])
 		id = str(w.get(index).split(' ')[0])
 		self.lastSelectedId = id
@@ -436,18 +474,20 @@ class Annotator():
 			self.cvs_image.delete(self.boxes[id])
 			self.boxes[id] = self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(box['color']), width=7)
 
+		barAddId(self, id)
+
 	# DRAWING NEW BOX
 	def setNaturalBox(self, id):
 		if self.boxes.get(id) is not None:
 			self.cvs_image.delete(self.boxes[id])
 		box = self.curr.instances[id]
-		self.boxes[id] = self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(box['color']), width=2)
+		self.boxes[id] = self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(box['color']), width=3)
 
 	def click(self, event):
 		if self.drawing:
 			self.curr_box = {"x1":0, "y1":0, "x2":0, "y2":0, "color":self.allInstances[self.curr_id].color}
 			self.curr_box['x1'], self.curr_box['y1'] = event.x, event.y
-			self.rect = self.cvs_image.create_rectangle(event.x, event.y, event.x, event.y, outline=self.curr_box['color'], width=2)
+			self.rect = self.cvs_image.create_rectangle(event.x, event.y, event.x, event.y, outline=self.curr_box['color'], width=3)
 
 	def drag(self, event):
 		if self.drawing:
@@ -507,11 +547,11 @@ class Annotator():
 		i = self.allInstances[id]
 		if i.boxes.get(self.curr.frameNum) is not None:
 			box = i.boxes[self.curr.frameNum]
-			self.boxes[id] = self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=i.color, width=2)
+			self.boxes[id] = self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=i.color, width=3)
 			self.list_ids.itemconfig(self.allInstances[id].index, bg=i.color)
 		else:
 			self.boxes.pop(id)
-			self.list_ids.itemconfig(self.allInstances[id].index, bg='white')
+			self.list_ids.itemconfig(self.allInstances[id].index, bg=self.col_light)
 
 
 	def matchCurrBoxAndId(self):
@@ -543,6 +583,9 @@ class Annotator():
 
 	def rightkey(self, event):
 		self.next()
+
+	def space(self, event):
+		self.playBtn()
 
 # OPENING FILE
 	# ON LOAD
@@ -576,49 +619,14 @@ class Annotator():
 			next = os.path.join(directory, videoFile + "_edited_" + str(file_count) + ".txt")
 			self.file = next
 			self.textFileName = prev
-		if not (self.textFileName is None or self.videoFileName is None):
-			self.resetEditor()
-			self.resetVariables()
-			self.cvs_image.delete('all')
-			self.openVideo()
 
-	def openVideo(self):
-		self.video = cv2.VideoCapture(self.videoFileName)
-		self.lbl_header.config(text="File: " + self.videoFileName.split("/")[-1])
-		self.setDimsAndMultipliers()
-		self.filling = True
-		self.fillFiles()
-		if self.checker is not None:
-			self.stopChecker = True
-		self.checker = threading.Thread(target=checkThread, args=(self, ))
-		self.checker.daemon = True
-		self.checking = True
-		self.checker.start()
-
-		self.window.update()
-
-	def setDimsAndMultipliers(self):
-		# set dimensions
-		self.ori_height = self.video.get(cv2.CAP_PROP_FRAME_HEIGHT)
-		self.ori_width = self.video.get(cv2.CAP_PROP_FRAME_WIDTH)
-		self.img_height = int(self.img_width/self.ori_width*self.ori_height)
-		self.cvs_image.config(height=self.img_height)
-		self.canvas.config(height=self.img_height + self.dialog_height + self.border)
-		self.window.minsize(self.width, self.img_height + self.dialog_height + self.border)
-
-		# find box multipliers
-		self.boxMult = self.img_width / self.ori_width
-
-		# find video info
-		self.vid_fps = self.video.get(cv2.CAP_PROP_FPS)
-		self.vid_totalFrames =  self.video.get(cv2.CAP_PROP_FRAME_COUNT)
-		print(str(self.vid_totalFrames))
-		# self.vid_length = int(self.vid_totalFrames/self.vid_fps/1.0)
-
-	def playThread(self):
-		while self.playing:
-			if not self.filling:
-				self.next()
+			if not (self.textFileName is None or self.videoFileName is None):
+				self.openingVideo = True
+				if self.firstVideo:
+					self.firstVideo = False
+					openVideo(self)
+				else:
+					self.addToDialog("Committing edits before loading a new video ...", True)
 
 	def fillFiles(self):
 		frm_index = 0
@@ -677,15 +685,14 @@ class Annotator():
 
 		# new frame number
 		self.lbl_frameNum.config(text="Frame Number: " + str(self.curr.frameNum))
+		shiftBar(self, self.curr.frameNum)
 
-		# udpate identity panel
-		if self.editorMode:
-			for id in self.allInstances:
-				self.list_ids.itemconfig(self.allInstances[id].index, bg='white')
+		# update identity panel
 
 		# reset elements
 		for id in self.boxes.keys():
 			self.cvs_image.delete(self.boxes[id])
+			self.list_ids.itemconfig(self.allInstances[id].index, bg=self.col_light)
 		self.boxes = {}
 
 		# new boxes
@@ -699,9 +706,8 @@ class Annotator():
 					removeInstances.append(id)
 					continue
 			box = self.curr.instances[id]
-			self.boxes[id] = self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(box['color']), width=2)
-			if self.editorMode:
-				self.list_ids.itemconfig(self.allInstances[id].index, bg=box['color'])
+			self.boxes[id] = self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(box['color']), width=3)
+			self.list_ids.itemconfig(self.allInstances[id].index, bg=box['color'])
 		for id in removeInstances:
 			self.curr.removeInstance(id)
 
@@ -719,16 +725,15 @@ class Annotator():
 		# grey-out dialog
 		last = self.list_dialog.size() - 1
 		for i in range(0, self.dialogCount):
-			self.list_dialog.itemconfig(last - i, fg="#383838")
+			self.list_dialog.itemconfig(last - i, fg="#BEBEBE")
 		self.dialogCount = 0
 
 		self.resetEditor()
 
 	def next(self):
+		if self.firstVideo:
+			return
 		if self.curr.frameNum < len(self.frames) - 1:
-			if (self.frames[self.curr.frameNum + 1].img is None):
-				self.filling = True
-
 			self.checking = True
 			# while self.filling:
 			# 	time.sleep(.5)
@@ -742,6 +747,8 @@ class Annotator():
 			self.addToDialog("Already on last frame")
 
 	def prev(self):
+		if self.firstVideo:
+			return
 		if self.curr.frameNum > 1:
 			self.onLeavingFrame()
 			self.curr = self.frames[self.curr.frameNum - 1]
@@ -750,16 +757,19 @@ class Annotator():
 		else:
 			self.addToDialog("Already on first frame")
 
+	def playBtn(self):
+		if self.btn_start['text'] == "Start":
+			self.btn_start.config(text="Stop")
+			self.start()
+		elif self.btn_start['text'] == "Stop":
+			self.btn_start.config(text="Start")
+			self.stop()
+		else:
+			print("error")
+
 	def start(self):
 		if not self.video is None:
-			if not self.filling and not self.playing:
-				self.playing = True
-				self.thread = threading.Thread(target=self.playThread, args=())
-				self.thread.start()
-
-
-			# NOTE: Set a callback to handle when the window is closed
-			# self.window.wm_protocol("WM_DELETE_WINDOW", self.onClose)
+			self.playing = True
 
 	def stop(self):
 		self.playing = False
@@ -783,7 +793,7 @@ class Annotator():
 				frameNum = int(frame.frameNum)
 				id = str(i)
 				box = self.allInstances[id].boxes[frameNum]
-				top_x, top_y, b_width, b_height = box['x1']/self.boxMult, box['y1']/self.boxMult, abs(box['x2']-box['x1'])/self.boxMult, abs(box['y2']-box['y1'])/self.boxMult
+				top_x, top_y, b_width, b_height = round(box['x1']/self.boxMult, 2), round(box['y1']/self.boxMult, 2), round(abs(box['x2']-box['x1'])/self.boxMult, 2), round(abs(box['y2']-box['y1'])/self.boxMult, 2)
 				f.write(",".join([str(frameNum), id, str(top_x), str(top_y), str(b_width), str(b_height)]) + "\n")
 		f.close()
 		last = self.list_dialog.size() - 1
