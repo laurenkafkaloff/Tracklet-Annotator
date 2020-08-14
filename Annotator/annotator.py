@@ -63,11 +63,11 @@ class Annotator():
 
 		# 				     CANVAS
 		#   LEFT PANEL (frm)           MAIN FRAME
-		# |   edit boxes     | Header | Play Btns | Dialog |
-		# |   edit labels    |	         LABEL			   |
-		# | identity panel   | 			 image 			   |
-		# |   checkboxes     |       	play bar		   |
-		# |   commit edits   |       					   |
+		# |   edit boxes     | Header | Play Btns | dialog
+		# |   edit labels    |	         LABEL
+		# | identity panel   | 			 image
+		# |   checkboxes     |       	play bar
+		# |   commit edits   |
 
 		col_leftPanel = '#bebfc1'
 		col_main = '#bebfc1'
@@ -149,7 +149,7 @@ class Annotator():
 		self.btn_next.grid(row=0, column=1, sticky=SE)
 		self.btn_prev.grid(row=1, column=1, sticky=NE)
 		self.btn_start.grid(row=2, column=1, sticky=NE)
-		# Dialog
+		# dialog
 		self.list_dialog = tk.Listbox(master=self.frm_toolbar, borderwidth=6, relief="flat", height=int(self.dialog_height/7), width=int(self.dialog_width/8), fg="black", bg=self.col_light, activestyle="none", font="Courier 11", selectforeground="blue", selectbackground=self.col_light)
 		self.list_dialog.grid(row=0, column=2, rowspan=3, sticky=NE)
 		# Image
@@ -224,7 +224,7 @@ class Annotator():
 		self.colorSetter = ColorSetter()
 		self.idsHaveChanged = []
 		self.maxId = -1
-		# DIALOG
+		# dialog
 		self.dialogCount = 0
 
 		if self.bar is not None:
@@ -299,7 +299,7 @@ class Annotator():
 		self.resetActions()
 		if not self.boxes.get(self.lastSelectedId) is None:
 			self.setNaturalBox(self.lastSelectedId)
-		self.addToDialog("Select an identity in the left panel")
+		self.addTodialog("Select an identity in the left panel")
 		self.newingBox = True
 
 	def deleteBox(self):
@@ -308,7 +308,7 @@ class Annotator():
 		self.resetActions()
 		if not self.boxes.get(self.lastSelectedId) is None:
 			self.setNaturalBox(self.lastSelectedId)
-		self.addToDialog("Select a box to delete")
+		self.addTodialog("Select a box to delete")
 		self.deletingBox = True
 		self.selectBox()
 
@@ -318,7 +318,7 @@ class Annotator():
 		self.resetActions()
 		if not self.boxes.get(self.lastSelectedId) is None:
 			self.setNaturalBox(self.lastSelectedId)
-		self.addToDialog("Select a box to redraw")
+		self.addTodialog("Select a box to redraw")
 		self.redrawing = True
 		self.selectBox()
 
@@ -328,7 +328,7 @@ class Annotator():
 		self.resetActions()
 		if not self.boxes.get(self.lastSelectedId) is None:
 			self.setNaturalBox(self.lastSelectedId)
-		self.addToDialog("Select a box to change the identity of")
+		self.addTodialog("Select a box to change the identity of")
 		self.changingId = True
 		self.selectBox()
 
@@ -363,7 +363,7 @@ class Annotator():
 	def doNothing(self, event):
 		pass
 
-	def addToDialog(self, text, clickToConfirm=False):
+	def addTodialog(self, text, clickToConfirm=False):
 		if self.dialogCount > 0:
 			self.list_dialog.itemconfig(self.list_dialog.size() - 1, fg='#505050')
 		self.list_dialog.insert(END, text)
@@ -384,7 +384,7 @@ class Annotator():
 		self.list_dialog.delete(last)
 		self.list_dialog.delete(last - 1)
 		self.list_dialog.delete(last - 2)
-		self.addToDialog(msg)
+		self.addTodialog(msg)
 
 		if self.openingVideo:
 			self.commitEdits()
@@ -412,7 +412,7 @@ class Annotator():
 		self.list_dialog.delete(last)
 		self.list_dialog.delete(last - 1)
 		self.list_dialog.delete(last - 2)
-		self.addToDialog(msg)
+		self.addTodialog(msg)
 		self.waitingForClick = False
 
 		if self.openingVideo:
@@ -452,10 +452,10 @@ class Annotator():
 		if self.newingBox:
 			if id not in self.boxes.keys(): # if not on frame -- wrong button otherwise
 				self.curr_id = id
-				self.addToDialog("Draw a box for ID #" + str(self.curr_id))
+				self.addTodialog("Draw a box for ID #" + str(self.curr_id))
 				self.drawing = True
 			else:
-				self.addToDialog("The selected identity is already on this frame -- please select again")
+				self.addTodialog("The selected identity is already on this frame -- please select again")
 
 		elif self.gettingSecondId:
 			for i in self.curr.instances.keys():
@@ -464,9 +464,9 @@ class Annotator():
 				self.secondId = id
 				self.gettingSecondId = False
 				self.selectingBox = False
-				self.addToDialog("Swapping identity tracks for ID #" + str(self.firstId) + " and #" + str(self.secondId) + " ...", True)
+				self.addTodialog("Swapping identity tracks for ID #" + str(self.firstId) + " and #" + str(self.secondId) + " ...", True)
 			else:
-				self.addToDialog("The selected identity was the same as the first identity -- please select again")
+				self.addTodialog("The selected identity was the same as the first identity -- please select again")
 				self.selectBox()
 
 		elif self.boxes.get(id) is not None: # highlight the selected box
@@ -500,9 +500,9 @@ class Annotator():
 			elif not self.waitingForClick:
 				self.curr_box['x2'], self.curr_box['y2'] = event.x, event.y
 				if self.redrawing:
-					self.addToDialog("Redrawing box from " + self.coordsToString(self.curr_box) + " for ID #" + self.curr_id + " ...", True)
+					self.addTodialog("Redrawing box from " + self.coordsToString(self.curr_box) + " for ID #" + self.curr_id + " ...", True)
 				elif self.newingBox:
-					self.addToDialog("Creating new box from " + self.coordsToString(self.curr_box) + " for ID #" + self.curr_id + " ...", True)
+					self.addTodialog("Creating new box from " + self.coordsToString(self.curr_box) + " for ID #" + self.curr_id + " ...", True)
 
 		if self.selectingBox:
 			if self.active_id is not None:
@@ -516,27 +516,27 @@ class Annotator():
 							self.secondId = self.curr_id
 							self.gettingSecondId = False
 							self.selectingBox = False
-							self.addToDialog("Swapping identity tracks for ID #" + str(self.firstId) + " and #" + str(self.secondId) + " ...", True)
+							self.addTodialog("Swapping identity tracks for ID #" + str(self.firstId) + " and #" + str(self.secondId) + " ...", True)
 						else:
-							self.addToDialog("The selected identity was the same as the first identity -- please select again")
+							self.addTodialog("The selected identity was the same as the first identity -- please select again")
 							self.selectBox()
 					else:
 						self.firstId = self.curr_id
 						self.gettingSecondId = True
-						self.addToDialog("Select an identity from the left panel or a box to swap with ID #" + str(self.curr_id))
+						self.addTodialog("Select an identity from the left panel or a box to swap with ID #" + str(self.curr_id))
 						self.selectBox()
 
 				elif self.redrawing:
-					self.addToDialog("Draw new box for ID #" + str(self.curr_id))
+					self.addTodialog("Draw new box for ID #" + str(self.curr_id))
 					self.cvs_image.delete(self.boxes[self.curr_id])
 					self.drawing = True
 					self.selectingBox = False
 
 				elif self.deletingBox:
-					self.addToDialog("Deleting box for ID #" + str(self.curr_id) + " ...", True)
+					self.addTodialog("Deleting box for ID #" + str(self.curr_id) + " ...", True)
 					self.selectingBox = False
 			else:
-				self.addToDialog("No box is currently highlighted - please select again")
+				self.addTodialog("No box is currently highlighted - please select again")
 
 	def coordsToString(self, box):
 		return "(" + str(box['x1']) + ", " + str(box['y1']) + ") to (" + str(box['x2']) + ", " + str(box['y2']) + ")"
@@ -626,7 +626,7 @@ class Annotator():
 					self.firstVideo = False
 					openVideo(self)
 				else:
-					self.addToDialog("Committing edits before loading a new video ...", True)
+					self.addTodialog("Committing edits before loading a new video ...", True)
 
 	def fillFiles(self):
 		frm_index = 0
@@ -728,6 +728,11 @@ class Annotator():
 			self.list_dialog.itemconfig(last - i, fg="#BEBEBE")
 		self.dialogCount = 0
 
+		for id in self.boxes_next.keys():
+			self.cvs_image.delete(self.boxes_next[id])
+		for id in self.boxes_prev.keys():
+			self.cvs_image.delete(self.boxes_prev[id])
+
 		self.resetEditor()
 
 	def next(self):
@@ -744,7 +749,7 @@ class Annotator():
 			time.sleep(.001) # NOTE: Change sleep into a function of fps
 		else:
 			self.stop()
-			self.addToDialog("Already on last frame")
+			self.addTodialog("Already on last frame")
 
 	def prev(self):
 		if self.firstVideo:
@@ -755,7 +760,7 @@ class Annotator():
 			self.loadNewFrame()
 			self.checking = True
 		else:
-			self.addToDialog("Already on first frame")
+			self.addTodialog("Already on first frame")
 
 	def playBtn(self):
 		if self.btn_start['text'] == "Start":
@@ -783,7 +788,7 @@ class Annotator():
 		self.prev()
 
 	def commitEdits(self):
-		self.addToDialog("Committing edits ...")
+		self.addTodialog("Committing edits ...")
 		self.commitEdits1()
 
 	def commitEdits1(self):
@@ -800,7 +805,7 @@ class Annotator():
 		msg = self.list_dialog.get(last)[:-4] + ": Finished"
 		self.dialogCount -= 1
 		self.list_dialog.delete(last)
-		self.addToDialog(msg)
+		self.addTodialog(msg)
 
 	# WINDOW CASES
 	def onClose(self):

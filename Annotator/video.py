@@ -145,13 +145,11 @@ def checkThread(self):
             self.stopChecker = False
             break
         if self.checking:
-            # print(f"tail: {self.tail}   curr: {self.curr.frameNum}   head: {self.head}   fwd: {self.fwdStop}   bkd: {self.bkdStop}")
             self.checking = False
             num = self.curr.frameNum
         # NEXT CLICK
             # shift window head forward one frame
             while self.head - num < self.fwdSize and self.head < self.vid_totalFrames:
-                # print(f"head: {self.head}   curr: {num}")
                 more, freeze = self.video.read()
                 if more:
                     self.head += 1
