@@ -26,7 +26,8 @@ python3 -m Annotator
 
 ### Formatting Data
 The program takes in a __directory containing a video and text file__ as input. Any modifications made to the tracks will be stored in this directory as a new file and be automatically applied when reopening the video for further edits.
-#### Valid Input
+> For an example, explore the files in Tracklet-Annotator/Example-Directory/Edited-Versions
+#### VALID INPUT
 _Video file types_ —  *.mp4, *.mov, *.avi, *.mpeg
 
 _Text file type_ — *.txt
@@ -39,14 +40,13 @@ _Text format_ — each line denotes one frame-level object instance as structure
 * <bb_left>, <bb_top> = upper-left coordinate of bounding box
 * <conf> =  the detection confidence of the auto-generated boxes (set to 1 for any manually drawn boxes)
 * __Store an empty text file in the directory if no prior detections were made__
-#### Output Format
+#### OUTPUT FORMAT
 The output is structured similarly, with both null fields listed as -1 if necessary. The top of the file may include several lines to store customized ID names and colors. The lines are structured as follows:
  ```bash
 * <id>, <color>, <name>
 ```
 * If only color OR name is customized, the default element is stored as "None"
 
-> For an example, explore the files in Tracklet-Annotator/Example-Directory/Edited-Versions
 ### Playing Video
 Start by clicking "Open Directory" to select the directory containing your desired video and text. file
 * Skip through frames — Prev: <left-key> | Next: <right-key> | Start/Stop: <space>
