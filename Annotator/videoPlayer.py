@@ -7,6 +7,7 @@ import tkinter as tk
 from Annotator.frame import Frame
 from Annotator.instance import Instance
 from Annotator.colors import ColorSetter
+from Annotator.barId import barId
 
 def openVideo(self):
 	self.video = cv2.VideoCapture(self.videoFileName)
@@ -58,30 +59,34 @@ def setDimsAndMultipliers(self):
 
 def makePlayBar(self):
     self.play_w = self.cvs_image.winfo_width() #1090
-    self.play_h = 15
+    self.play_h = self.playBar_height/2 + 15/2 - 10
     self.play_total_frames_on_bar = 100
     self.play_x = self.play_w/self.play_total_frames_on_bar
     self.cvs_playBar.config(width=self.play_w)
 
-    self.cvs_playBar.create_line(self.play_w/2, self.play_h/2 + self.playBar_height/2 + 1, self.play_w/2, self.play_h/2 + self.playBar_height/2, arrow=tk.LAST)
-    self.play_text = self.cvs_playBar.create_text(self.play_w/2, self.play_h/2 + self.playBar_height/2 + 16, text=f"Current Frame: {self.curr.frameNum}", font="TkDefaultFont 11")
+    self.cvs_playBar.create_line(self.play_w/2, self.play_h + 11, self.play_w/2, self.play_h + 10, arrow=tk.LAST)
+    self.play_text = self.cvs_playBar.create_text(self.play_w/2, self.play_h + 26, text=f"Current Frame: {self.curr.frameNum}", font="TkDefaultFont 11")
 
     shiftBar(self, 0)
 
 def shiftBar(self, frameNum):
-    self.play_0 = max(self.play_w/2 - self.play_x * (frameNum-1), 0)
-    self.play_1 = self.playBar_height/2 - self.play_h/2
-    self.play_2 = min(self.play_w, self.play_w/2 + self.play_x * (self.vid_totalFrames-1) - self.play_x * (frameNum-1))
-    self.play_3 = self.playBar_height/2 + self.play_h/2
+	self.play_0 = max(self.play_w/2 - self.play_x * (frameNum-1), 0)
+	self.play_1 = 10
+	self.play_2 = min(self.play_w, self.play_w/2 + self.play_x * (self.vid_totalFrames-1) - self.play_x * (frameNum-1))
+	self.play_3 = self.play_1 + self.play_h
 
-    if self.bar is not None:
-        self.cvs_playBar.delete(self.bar)
-    self.bar = self.cvs_playBar.create_rectangle(self.play_0, self.play_1, self.play_2, self.play_3, fill='white', outline='black', width = 2)
+	if self.bar is not None:
+		self.cvs_playBar.delete(self.bar)
+	self.bar = self.cvs_playBar.create_rectangle(self.play_0, self.play_1, self.play_2, self.play_3, fill='white', outline='black', width = 2)
 
-    shiftHeadTail(self, frameNum)
-    shiftId(self)
+	shiftHeadTail(self, frameNum)
 
-    self.cvs_playBar.itemconfig(self.play_text, text=f"Current Frame: {str(frameNum)}")
+	if self.bar_id_top is not None:
+		self.bar_id_top.shift(frameNum)
+	if self.bar_id_bottom is not None:
+		self.bar_id_bottom.shift(frameNum)
+
+	self.cvs_playBar.itemconfig(self.play_text, text=f"Current Frame: {str(frameNum)}")
 
 def barFindLine(self, num):
     middle = self.play_w/2
@@ -89,9 +94,6 @@ def barFindLine(self, num):
     return line
 
 def shiftHeadTail(self, frameNum):
-    if self.shifting:
-        return
-    self.shifting = True
     line = barFindLine(self, self.head)
     if self.bar_head is not None:
         self.cvs_playBar.delete(self.bar_head)
@@ -101,27 +103,24 @@ def shiftHeadTail(self, frameNum):
     if self.bar_tail is not None:
         self.cvs_playBar.delete(self.bar_tail)
     self.bar_tail = self.cvs_playBar.create_line(line, self.play_1, line, self.play_3)
-    self.shifting = False
 
 def barAddId(self, i):
-    if self.bar_id is not None:
-        self.cvs_playBar.delete(self.bar_id)
-
-    id = self.allInstances[i]
-    if len(id.boxes) > 0:
-        # TODO: Allow for an id to leave the frame and come back (two separate lines) -- sort of the keys then look for gaps
-        self.bar_id_first = min(id.boxes.keys())
-        self.bar_id_last = max(id.boxes.keys())
-        self.bar_id_color = id.color
-        self.bar_id = 0
-        shiftId(self)
-
-def shiftId(self):
-    if self.bar_id is None or self.bar_id_first == self.bar_id_last:
-        return
-    height = self.playBar_height/2
-    self.cvs_playBar.delete(self.bar_id)
-    self.bar_id = self.cvs_playBar.create_rectangle(barFindLine(self, self.bar_id_first), height-4, barFindLine(self, self.bar_id_last), height+2, fill=self.bar_id_color, outline="black", width=.2)
+	id = self.allInstances[i]
+	if self.bar_id_top is None:
+		self.bar_id_top = barId(id, True, self)
+	elif self.bar_id_bottom is None and self.bar_id_top.id != i:
+		self.bar_id_bottom = barId(id, False, self)
+	elif self.bar_id_top.id != i and self.bar_id_bottom.id != i:
+		if self.top:
+			self.top = False
+			for box in self.bar_id_top.boxes:
+				self.cvs_playBar.delete(box)
+			self.bar_id_top = barId(id, True, self)
+		else:
+			self.top = True
+			for box in self.bar_id_bottom.boxes:
+				self.cvs_playBar.delete(box)
+			self.bar_id_bottom = barId(id, False, self)
 
 def frameToImage(self, freeze):
     rgb = cv2.cvtColor(freeze, cv2.COLOR_BGR2RGB)

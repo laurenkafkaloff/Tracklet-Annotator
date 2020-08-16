@@ -1,50 +1,7 @@
 class ColorSetter(object):
 
 	def __init__(self):
-		self.avail = None
-		self.order = []
-		self.load()
-
-	def getColor(self):
-		if not self.order:
-			self.reset()
-		col = str(self.order.pop())
-		return col, str(self.avail[col])
-
-	def reset(self):
-		self.order = ['forest green', 'light pink', 'maroon', 'brown', 'beige', 'teal', 'magenta', 'bright pink', 'dark purple', 'dark blue',
-					  'royal blue', 'bright blue', 'bright green', 'bright yellow', 'dark orange', 'bright red', 'pink', 'purple', 'blue',
-					  'light blue', 'green', 'lime', 'yellow', 'orange', 'red']
-
-	def load(self):
-		# self.avail = {
-		#     "aqua": "#00ffff",
-		#     "beige": "#f5f5dc",
-		#     "blue": "#0000ff",
-		#     "brown": "#a52a2a",
-		#     "cyan": "#008b8b",
-		#     "grey": "#a9a9a9",
-		#     "khaki": "#bdb76b",
-		#     "olive green": "#556b2f",
-		#     "dark orange": "#ff8c00",
-		#     "red": "#8b0000",
-		#     "salmon": "#e9967a",
-		#     "violet": "#9400d3",
-		#     "gold": "#ffd700",
-		#     "green": "#008000",
-		#     "indigo": "#4b0082",
-		#     "khaki": "#f0e68c",
-		#     "lime": "#00ff00",
-		#     "magenta": "#ff00ff",
-		#     "maroon": "#800000",
-		#     "navy": "#000080",
-		#     "olive": "#808000",
-		#     "orange": "#ffa500",
-		#     "pink": "#ffc0cb",
-		#     "purple": "#800080",
-		#     "yellow": "#ffff00"
-		# }
-		self.avail = {
+		self.colorToId = {
 		    "red": "#FF7878",
 		    "orange": "#FFCC99",
 		    "yellow": "#FFFF99",
@@ -71,3 +28,43 @@ class ColorSetter(object):
 		    "light pink": "#FFCCE5",
 		    "forest green": "#00994C"
 		}
+		self.idToColor = {
+		    "#FF7878":"red",
+		    "#FFCC99":"orange",
+		    "#FFFF99":"yellow",
+		    "#CCFF99":"lime",
+		    "#77FF88":"green",
+		    "#33FFFF":"light blue",
+		    "#99CCFF":"blue",
+		    "#CC99FF":"purple",
+		    "#FF99FF":"pink",
+		    "#FF3333":"bright red",
+		    "#FF8000":"dark orange",
+		    "#FFFF00":"bright yellow",
+		    "#00FF00":"bright green",
+		    "#00FFFF":"bright blue",
+		    "#0080FF":"royal blue",
+		    "#0000FF":"dark blue",
+		    "#7F00FF":"dark purple",
+		    "#FF00FF":"bright pink",
+		    "#FF007F": "magenta",
+		    "#009999":"teal",
+		    "#FFE5CC":"beige",
+		    "#994C00":"brown",
+		    "#990000":"maroon",
+		    "#FFCCE5":"light pink",
+		    "#00994C":"forest green"
+		}
+		self.order = []
+
+	def getColor(self):
+		if not self.order:
+			self.reset()
+		col = self.colorToId[self.order.pop()]
+		return col
+
+
+	def reset(self):
+		self.order = ['forest green', 'light pink', 'maroon', 'brown', 'beige', 'teal', 'magenta', 'bright pink', 'dark purple', 'dark blue',
+					  'royal blue', 'bright blue', 'bright green', 'bright yellow', 'dark orange', 'bright red', 'pink', 'purple', 'blue',
+					  'light blue', 'green', 'lime', 'yellow', 'orange', 'red']

@@ -10,11 +10,13 @@ import shutil
 import math
 import copy
 import cv2
+from matplotlib.colors import is_color_like
 
 from Annotator.frame import Frame
 from Annotator.instance import Instance
 from Annotator.colors import ColorSetter
-from Annotator.video import *
+from Annotator.videoPlayer import *
+from Annotator.barId import barId
 
 class Annotator():
 	# TODO: Account for edge cases
@@ -33,7 +35,7 @@ class Annotator():
 		self.leftPanelHeight_Editor = 170
 		self.leftPanelHeight_Row1 = 10
 		self.leftPanelHeight_Row2 = 50
-		self.leftPanelHeight_Labeler = 120
+		self.leftPanelHeight_Labeler = 150
 
 		self.displayedIdent1Height = 15
 		self.displayedIdent2Height = 15
@@ -46,7 +48,9 @@ class Annotator():
 		self.bar = None
 		self.bar_head = None
 		self.bar_tail = None
-		self.bar_id = None
+		self.bar_id_top = None
+		self.bar_id_bottom = None
+		self.topLevelOpen = False
 
 	# Display
 		# WINDOW
@@ -61,18 +65,9 @@ class Annotator():
 
 		self.resetVariables()
 
-		# 				     CANVAS
-		#   LEFT PANEL (frm)           MAIN FRAME
-		# |   edit boxes     | Header | Play Btns | dialog
-		# |   edit labels    |	         LABEL
-		# | identity panel   | 			 image
-		# |   checkboxes     |       	play bar
-		# |   commit edits   |
-
 		col_leftPanel = '#bebfc1'
 		col_main = '#bebfc1'
 		self.col_light ='#F0F0F0'
-
 
 		# BASE
 		self.canvas = Canvas(master=self.window, width=self.width, height=self.height, relief='flat', bg=col_main, highlightthickness=0)
@@ -89,29 +84,31 @@ class Annotator():
 		# LEFT PANEL
 		# Edit Boxes
 		self.frm_editor = tk.Frame(master=self.frm_leftPanel)
-		self.lbl_editorHeader = tk.Label(master=self.frm_editor, text="Box Editor", bg=col_leftPanel, width=int(self.leftPanelWidth/10))
+		self.lbl_editorHeader = tk.Label(master=self.frm_editor, text="Tracklet Editor", bg=col_leftPanel, width=int(self.leftPanelWidth/10))
 		self.btn_newBox = tk.Button(master=self.frm_editor, text="Create new box", command=self.newBox)
 		self.btn_deleteBox = tk.Button(master=self.frm_editor, text="Delete box", command=self.deleteBox)
 		self.btn_redrawBox = tk.Button(master=self.frm_editor, text="Redraw box", command=self.redrawBox)
-		self.btn_changeId = tk.Button(master=self.frm_editor, text="Change box ID + Tracklet", command=self.changeId)
+		self.btn_cancel = tk.Button(master=self.frm_editor, text="Cancel", command=self.esc)
 		self.lbl_editorHeader.grid(sticky=N+W, row=0, column=0)
 		self.btn_newBox.grid(sticky=S+W, row=1, column=0)
 		self.btn_deleteBox.grid(sticky=S+W, row=2, column=0)
 		self.btn_redrawBox.grid(sticky=S+W,row=3, column=0)
-		self.btn_changeId.grid(sticky=S+W, row=4, column=0)
+		self.btn_cancel.grid(sticky=S+W, row=4, column=0)
 		# Edit Labels
 		self.frm_labeler = tk.Frame(master=self.frm_leftPanel)
-		self.lbl_labelerHeader = tk.Label(master=self.frm_labeler, text="Label Editor", bg=col_leftPanel, width=int(self.leftPanelWidth/10))
-		self.btn_label1 = tk.Button(master=self.frm_labeler, text="Button One", command=self.deleteBox)
-		self.btn_label2 = tk.Button(master=self.frm_labeler, text="Button Two", command=self.redrawBox)
+		self.lbl_labelerHeader = tk.Label(master=self.frm_labeler, text="Identity Editor", bg=col_leftPanel, width=int(self.leftPanelWidth/10))
+		self.btn_swapId = tk.Button(master=self.frm_labeler, text="Swap track IDs", command=self.changeId)
+		self.btn_mergeId = tk.Button(master=self.frm_labeler, text="Merge tracks into one ID", command=self.mergeId)
+		self.btn_nameId = tk.Button(master=self.frm_labeler, text="Change ID name or color", command=self.nameId)
 		self.lbl_labelerHeader.grid(sticky=N+W, row=0, column=0)
-		self.btn_label1.grid(sticky=S+W,row=1, column=0)
-		self.btn_label2.grid(sticky=S+W, row=2, column=0)
+		self.btn_swapId.grid(sticky=S+W,row=1, column=0)
+		self.btn_mergeId.grid(sticky=S+W, row=2, column=0)
+		self.btn_nameId.grid(sticky=S+W, row=3, column=0)
 		# Identity Panel
 		self.frm_identities = tk.Frame(master=self.frm_leftPanel, bg=col_leftPanel)
 		self.lbl_allidheader = tk.Label(master=self.frm_identities, text=" All Identities", bg=col_leftPanel)
 		self.btn_newId = tk.Button(master=self.frm_identities, text="New ID", command=self.newId, highlightbackground=col_leftPanel, border=3)
-		self.list_ids = tk.Listbox(master=self.frm_identities, borderwidth=6, relief="flat", height=2 * self.leftPanelHeight_Row1, bg=self.col_light, selectforeground="blue", selectbackground=col_main, activestyle="underline")
+		self.list_ids = tk.Listbox(master=self.frm_identities, borderwidth=6, relief="flat", height=int(1.8 * self.leftPanelHeight_Row1), bg=self.col_light, selectforeground="blue", selectbackground=col_main, activestyle="underline")
 		self.lbl_allidheader.grid(sticky=W+E, row=0, column=0)
 		self.btn_newId.grid(sticky=N+E, row=0, column=1)
 		self.list_ids.grid(sticky=N+W, row=1, column=0, columnspan = 2)
@@ -137,11 +134,9 @@ class Annotator():
 		self.btn_open = tk.Button(master=self.frm_toolbar, text="Open File", command=self.openDir, highlightbackground=col_main, borderwidth=6)
 		self.lbl_fileLoaded = tk.Label(master=self.frm_toolbar, text="  No file loaded", bg=col_main)
 		self.lbl_fileFrames = tk.Label(master=self.frm_toolbar, text="  Total frames: ", bg=col_main)
-		# self.lbl_fileTime = tk.Label(master=self.frm_toolbar, text="  Total length: ", bg=col_main)
 		self.btn_open.grid(row=0, column=0, sticky=SW)
 		self.lbl_fileLoaded.grid(row=1, column=0, sticky=NW)
 		self.lbl_fileFrames.grid(row=2, column=0, sticky=NW)
-		# self.lbl_fileTime.grid(row=3, column=0, sticky=NW)
 		# Play Btns
 		self.btn_next = tk.Button(master=self.frm_toolbar, text="Next Frame", command=self.btn_next, highlightbackground=col_main)
 		self.btn_prev = tk.Button(master=self.frm_toolbar, text="Prev Frame", command=self.btn_prev, highlightbackground=col_main)
@@ -196,6 +191,7 @@ class Annotator():
 	def resetVariables(self):
 		# FILLING VIDEO
 		self.filling = False
+		self.identityDetails = {}
 		self.tempCount = 0
 		self.fileProg = 0
 		self.checking = False
@@ -226,6 +222,7 @@ class Annotator():
 		self.maxId = -1
 		# dialog
 		self.dialogCount = 0
+		self.top = True
 
 		if self.bar is not None:
 			self.cvs_playBar.delete('all')
@@ -249,16 +246,19 @@ class Annotator():
 		self.showNext()
 
 	def resetActions(self):
+		for i in self.curr.instances.keys():
+			self.setNaturalBox(i)
 		self.drawing = False
 		self.selectingBox = False
 		self.deletingBox = False
 		self.redrawing = False
 		self.newingBox = False
 		self.changingId = False
+		self.mergingId = False
+		self.namingId = False
 		self.gettingSecondId = False
 		self.waitingForClick = False
 		self.openingVideo = False
-		self.shifting = False
 
 # EDITOR MODE
 	def showPrev(self):
@@ -271,6 +271,7 @@ class Annotator():
 					self.list_ids.itemconfig(self.allInstances[id].index, fg='red')
 		else:
 			self.prev_on = True
+			self.p = 1
 			for id in self.boxes_prev.keys():
 				self.cvs_image.delete(self.boxes_prev[id])
 				self.list_ids.itemconfig(self.allInstances[id].index, fg='black')
@@ -328,9 +329,30 @@ class Annotator():
 		self.resetActions()
 		if not self.boxes.get(self.lastSelectedId) is None:
 			self.setNaturalBox(self.lastSelectedId)
-		self.addTodialog("Select a box to change the identity of")
+		self.addTodialog("Select the box of the first identity you'd like to swap")
 		self.changingId = True
 		self.selectBox()
+
+	def mergeId(self):
+		if self.firstVideo:
+			return
+		self.resetActions()
+		if not self.boxes.get(self.lastSelectedId) is None:
+			self.setNaturalBox(self.lastSelectedId)
+		self.addTodialog("--------------------------------------------------------")
+		self.addTodialog("Merging branch ID [A] onto master ID [B],")
+		self.addTodialog("with any overlapping/conflicting frames stored on [A]")
+		self.addTodialog("Select an identity from the left panel to be branch ID [A]")
+		self.mergingId = True
+
+	def nameId(self):
+		if self.firstVideo:
+			return
+		self.resetActions()
+		if not self.boxes.get(self.lastSelectedId) is None:
+			self.setNaturalBox(self.lastSelectedId)
+		self.addTodialog("Select an identity from the left panel to change the name of")
+		self.namingId = True
 
 	def selectBox(self):
 		self.selectingBox = True
@@ -353,10 +375,23 @@ class Annotator():
 		if a_id is None:
 			self.maxId = self.maxId + 1
 			a_id = str(self.maxId)
-		colorName, colorId = self.colorSetter.getColor()
+
+		name, col = "None", "None"
+		ccolor, cname = True, True
+		if a_id in self.identityDetails:
+			name, col = self.identityDetails[a_id]
+		if col == "None":
+			col = self.colorSetter.getColor()
+			ccolor = False
+		if name == "None":
+			if self.colorSetter.idToColor.get(col) is not None:
+				name = self.colorSetter.idToColor[col]
+			else:
+				name = col
+			cname = False
 		index = self.list_ids.size()
-		self.list_ids.insert(END, str(a_id) + "   " + colorName)
-		self.i = Instance(a_id, index, colorId, colorName)
+		self.list_ids.insert(END, str(a_id) + "   " + name)
+		self.i = Instance(a_id, index, col, name, ccolor, cname)
 		self.allInstances[a_id] = self.i
 		self.list_ids.yview(END)
 
@@ -379,6 +414,9 @@ class Annotator():
 		self.list_dialog.selection_clear(0, END)
 
 	def confirm(self, event):
+		if not self.waitingForClick:
+			return
+		self.waitingForClick = False
 		last = self.list_dialog.size() - 1
 		msg = self.list_dialog.get(last - 2)[:-4] + ": Confirmed"
 		self.list_dialog.delete(last)
@@ -407,6 +445,9 @@ class Annotator():
 		self.resetActions()
 
 	def cancel(self, event):
+		if not self.waitingForClick:
+			return
+		self.waitingForClick = False
 		last = self.list_dialog.size() - 1
 		msg = self.list_dialog.get(last - 2)[:-4] + ": Canceled"
 		self.list_dialog.delete(last)
@@ -457,6 +498,23 @@ class Annotator():
 			else:
 				self.addTodialog("The selected identity is already on this frame -- please select again")
 
+		elif self.mergingId:
+			if self.gettingSecondId:
+				if id is not self.firstId:
+					self.secondId = id
+					self.gettingSecondId = False
+					self.addTodialog(f"Merging branch ID #{self.firstId} onto master ID #{self.secondId} ...", True)
+				else:
+					self.addTodialog("The selected identity was the same as the first identity -- please select again")
+			else:
+				self.firstId = id
+				self.gettingSecondId = True
+				self.addTodialog("Select an identity from the left panel to be master ID [B]")
+
+		elif self.namingId:
+			self.curr_id = id
+			self.idDetails()
+
 		elif self.gettingSecondId:
 			for i in self.curr.instances.keys():
 				self.setNaturalBox(i)
@@ -475,6 +533,65 @@ class Annotator():
 			self.boxes[id] = self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(box['color']), width=7)
 
 		barAddId(self, id)
+
+	def idDetails(self):
+		self.topLevelOpen = True
+		self.win = Toplevel()
+
+		# Display
+		self.win.geometry("+%d+%d" % (self.width/2, self.height/2))
+		self.win.minsize(width=300, height=25)
+		self.win.grid_columnconfigure(0, weight=1, minsize=45)
+		self.win.grid_columnconfigure(1, weight=1)
+		self.win.grid_rowconfigure(0, weight=1)
+		self.win.grid_rowconfigure(1, weight=1)
+		self.win.grid_rowconfigure(2, weight=1)
+
+		# Features
+		self.win.title(f'Editing ID #{self.curr_id}')
+		id = self.allInstances[self.curr_id]
+		col = self.colorSetter.idToColor[id.color]
+		if id.customName:
+			self.entryName = StringVar(self.window, value=id.name)
+		else:
+			self.entryName = StringVar(self.window, value=col)
+		self.entryColor = StringVar(self.window, value=col)
+		Label(self.win, text=" Edit name: ").grid(row=0, column=0, columnspan=2, sticky=W)
+		Entry(self.win, textvariable=self.entryName).grid(row=0, column=1, sticky=W)
+		Label(self.win, text=" Edit color: ").grid(row=1, column=0, columnspan=2, sticky=W)
+		Entry(self.win, textvariable=self.entryColor).grid(row=1, column=1, sticky=W)
+		Button(self.win, text='Confirm', command=self.idDetailsConfirm).grid(row=2, column=1)
+		Button(self.win, text='Cancel', command=self.idDetailsCancel).grid(row=2, column=0)
+
+
+	def idDetailsCancel(self):
+		self.win.destroy()
+		self.topLevelOpen = False
+		self.namingId = False
+
+	def idDetailsConfirm(self):
+		id = self.allInstances[self.curr_id]
+		col = self.colorSetter.idToColor[id.color]
+		newCol = self.entryColor.get()
+		newName = self.entryName.get()
+		if col != newCol:
+			if is_color_like(newCol):
+				id.color = newCol
+				id.customColor = True
+				for box in id.boxes.keys():
+					id.boxes[box]['color'] = newCol
+			else:
+				self.addTodialog("Invalid color entered -- please try again")
+		if (id.customName and id.name != newName) or (not id.customName and newName != col):
+			id.name = newName
+			id.customName = True
+			self.list_ids.delete(id.index)
+			self.list_ids.insert(id.index, str(id.id) + "   " + id.name)
+		self.updateTempFrame(self.curr_id)
+		self.curr_id = None
+		self.topLevelOpen = False
+		self.namingId = False
+		self.win.destroy()
 
 	# DRAWING NEW BOX
 	def setNaturalBox(self, id):
@@ -542,20 +659,23 @@ class Annotator():
 		return "(" + str(box['x1']) + ", " + str(box['y1']) + ") to (" + str(box['x2']) + ", " + str(box['y2']) + ")"
 
 	def updateTempFrame(self, id):
+		num = self.curr.frameNum
+		i = self.allInstances[id]
 		if self.boxes.get(id) is not None:
 			self.cvs_image.delete(self.boxes[id])
-		i = self.allInstances[id]
-		if i.boxes.get(self.curr.frameNum) is not None:
-			box = i.boxes[self.curr.frameNum]
+			self.boxes.pop(id)
+			self.list_ids.itemconfig(i.index, bg=self.col_light)
+		if i.boxes.get(num) is not None:
+			box = i.boxes[num]
 			self.boxes[id] = self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=i.color, width=3)
 			self.list_ids.itemconfig(self.allInstances[id].index, bg=i.color)
-		else:
-			self.boxes.pop(id)
-			self.list_ids.itemconfig(self.allInstances[id].index, bg=self.col_light)
 
+		if self.bar_id_top is not None and id == self.bar_id_top.id:
+			self.bar_id_top.updateEnds(num)
+		elif self.bar_id_bottom is not None and id == self.bar_id_bottom.id:
+			self.bar_id_bottom.updateEnds(num)
 
 	def matchCurrBoxAndId(self):
-		# TODO: Make all dialog boxes go through here
 		if self.changingId:
 			a = self.allInstances[self.firstId]
 			b = self.allInstances[self.secondId]
@@ -563,9 +683,17 @@ class Annotator():
 			self.updateTempFrame(self.firstId) # update short term storage frame
 			self.updateTempFrame(self.secondId)
 
+		elif self.mergingId:
+			a = self.allInstances[self.firstId]
+			b = self.allInstances[self.secondId]
+			a.mergeId(b, self.curr.frameNum, self.frames, self.idsHaveChanged) # update long term storage frames
+			self.updateTempFrame(self.firstId) # update short term storage frame
+			self.updateTempFrame(self.secondId)
+
+
 		elif self.redrawing or self.newingBox:
 			id = self.allInstances[str(self.curr_id)]
-			id.updateBoxes(self.curr_box, self.curr)
+			id.updateBoxes(self.curr_box, self.curr, 1)
 			self.updateTempFrame(self.curr_id)
 
 		self.curr_id = None
@@ -573,9 +701,13 @@ class Annotator():
 
 	# CASES
 	def key_esc(self, event):
-		self.drawing = False
-		if self.rect != None:
+		self.esc()
+
+	def esc(self):
+		if self.rect is not None:
 			self.cvs_image.delete(self.rect)
+		self.addTodialog("Actions canceled")
+		self.resetActions()
 
 	# DISPLAY
 	def leftkey(self, event):
@@ -627,41 +759,58 @@ class Annotator():
 					openVideo(self)
 				else:
 					self.addTodialog("Committing edits before loading a new video ...", True)
+			else:
+				print("Directory is missing .mp4 video or .txt text file")
 
 	def fillFiles(self):
 		frm_index = 0
 		id_index = 1
 		box_index = 2
-
+		conf_index = 6
 		# each frame stores identities with their boxes for quick access (short term storage)
 		# each identity stores its frames with their boxes (long term storage)
+		# try:
 		for line in open(self.textFileName, "r"):
 			# data format: 1, 3, 794.27, 247.59, 71.245, 174.88, -1, -1, -1, -1
-			textArray = line.split(",")
-			a_frame = int(textArray[frm_index])
-			a_id = str(textArray[id_index])
-			if int(a_id) > self.maxId:
-				self.maxId = int(a_id)
+			if line[0] == "*":
+				# format id #, name, color
+				textArray = line[2:].split(",")
+				a_id = str(textArray[0])
+				a_color = str(textArray[1])
+				a_name = str(textArray[2][:-1])
+				self.identityDetails[a_id] = (a_name, a_color)
+			else:
+				textArray = line.split(",")
+				a_frame = int(textArray[frm_index])
+				a_id = str(textArray[id_index])
+				if len(textArray) > conf_index:
+					a_conf = round(float(textArray[conf_index]), 2)
+				else:
+					a_conf = -1
 
-			# add frame if it doesn't exist yet
-			if a_frame == len(self.frames):
-				self.frames.append(Frame(frameNum=a_frame))
+				if int(a_id) > self.maxId:
+					self.maxId = int(a_id)
+				# add frame if it doesn't exist yet
+				if a_frame == len(self.frames):
+					self.frames.append(Frame(frameNum=a_frame))
 
-			x1 = float(textArray[box_index]) * self.boxMult # accounts for image resizing
-			y1 = float(textArray[box_index + 1]) * self.boxMult
-			x2 = x1 + float(textArray[box_index + 2]) * self.boxMult
-			y2 = y1 + float(textArray[box_index + 3]) * self.boxMult
-			box =  {"x1":x1, "y1":y1, "x2":x2, "y2":y2}
+				x1 = float(textArray[box_index]) * self.boxMult # accounts for image resizing
+				y1 = float(textArray[box_index + 1]) * self.boxMult
+				x2 = x1 + float(textArray[box_index + 2]) * self.boxMult
+				y2 = y1 + float(textArray[box_index + 3]) * self.boxMult
+				box =  {"x1":x1, "y1":y1, "x2":x2, "y2":y2}
 
-			# add new instance if this is its first frame/box
-			if self.allInstances.get(a_id) is None:
-				self.newId(a_id)
-			box['color'] = self.allInstances[a_id].color
+				# add new instance if this is its first frame/box
+				if self.allInstances.get(a_id) is None:
+					self.newId(a_id)
+				box['color'] = self.allInstances[a_id].color
 
-			# short term storage -- add box and id to frame storage
-			self.frames[a_frame].addInstance(a_id, box)
-			# long term storage -- add box to an existing instance's list of boxes
-			self.allInstances[a_id].updateBoxes(box, self.frames[a_frame])
+				# short term storage -- add box and id to frame storage
+				self.frames[a_frame].addInstance(a_id, box)
+				# long term storage -- add box to an existing instance's list of boxes
+				self.allInstances[a_id].updateBoxes(box, self.frames[a_frame], a_conf)
+		#except:
+		#	print("File is not in the correct format")
 
 	def loadNewBoxes(self, frame=None):
 		if frame is None:
@@ -679,15 +828,12 @@ class Annotator():
 		if self.displayedImage is None:
 			self.displayedImage = self.cvs_image.create_image(0, 0, anchor="nw", image=self.curr.img)
 		else:
-			# self.cvs_image.delete(self.displayedImage)
-			# self.displayedImage = self.cvs_image.create_image(0, 0, anchor="nw", image = self.curr.img)
 			self.cvs_image.itemconfig(self.displayedImage, image = self.curr.img)
 
 		# new frame number
 		self.lbl_frameNum.config(text="Frame Number: " + str(self.curr.frameNum))
 		shiftBar(self, self.curr.frameNum)
 
-		# update identity panel
 
 		# reset elements
 		for id in self.boxes.keys():
@@ -711,12 +857,6 @@ class Annotator():
 		for id in removeInstances:
 			self.curr.removeInstance(id)
 
-	# def frameToImage(self, freeze):
-	# 	rgb = cv2.cvtColor(freeze, cv2.COLOR_BGR2RGB)
-	# 	img = Image.fromarray(rgb)
-	# 	imgResized = img.resize((self.img_width, self.img_height), Image.NEAREST)
-	# 	return ImageTk.PhotoImage(imgResized)
-
 	# PLAYING VIDEO
 	def onLeavingFrame(self):
 		if not self.playing:
@@ -727,6 +867,11 @@ class Annotator():
 		for i in range(0, self.dialogCount):
 			self.list_dialog.itemconfig(last - i, fg="#BEBEBE")
 		self.dialogCount = 0
+
+		if not self.next_on:
+			self.showNext()
+		if not self.prev_on:
+			self.showPrev()
 
 		for id in self.boxes_next.keys():
 			self.cvs_image.delete(self.boxes_next[id])
@@ -793,19 +938,30 @@ class Annotator():
 
 	def commitEdits1(self):
 		f = open(self.file, "w+")
+		for i in self.allInstances.keys():
+			id = self.allInstances[i]
+			if id.customColor or id.customName:
+				color, name = "None", "None"
+				if id.customColor:
+					color = id.color
+				if id.customName:
+					name = id.name
+				f.write("* " + ",".join([i, color, name]) + "\n")
 		for frame in self.frames:
 			for i in sorted(frame.instances.keys()):
 				frameNum = int(frame.frameNum)
 				id = str(i)
 				box = self.allInstances[id].boxes[frameNum]
 				top_x, top_y, b_width, b_height = round(box['x1']/self.boxMult, 2), round(box['y1']/self.boxMult, 2), round(abs(box['x2']-box['x1'])/self.boxMult, 2), round(abs(box['y2']-box['y1'])/self.boxMult, 2)
-				f.write(",".join([str(frameNum), id, str(top_x), str(top_y), str(b_width), str(b_height)]) + "\n")
+				conf = round(float(box['conf']), 2)
+				f.write(",".join([str(frameNum), id, str(top_x), str(top_y), str(b_width), str(b_height), str(conf)]) + "\n")
 		f.close()
 		last = self.list_dialog.size() - 1
 		msg = self.list_dialog.get(last)[:-4] + ": Finished"
 		self.dialogCount -= 1
 		self.list_dialog.delete(last)
 		self.addTodialog(msg)
+
 
 	# WINDOW CASES
 	def onClose(self):
