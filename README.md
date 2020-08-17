@@ -37,7 +37,7 @@ For an example, explore the files in Tracklet-Annotator/Example-Directory/Edited
 * __Text format__ — each line denotes one frame-level object instance as structured below
    * Null fields (id, conf) should be listed as -1
    * <bb_left>, <bb_top> = top-left coordinate of bounding box
-   * <conf> =  the detection confidence of the auto-generated boxes (set to 1 for any manually drawn boxes)
+   * \<conf\> =  the detection confidence of the auto-generated boxes (set to 1 for any manually drawn boxes)
   * __Store an empty text file in the directory if no prior detections were made__
 ```bash
 <frame>, <id>, <bb_left>, <bb_top>, <bb_width>, <bb_height> (optional: <conf>)
@@ -74,12 +74,12 @@ All button instructions and confirmations are printed in the built-in dialog box
 * __Show Previous/Next Boxes__ — Selecting these checkboxes will thinly draw previous/next-frame boxes onto the current frame. It will also highlight the appearing IDs in red/green in the identities panel. The purpose of this feature is to ease the process of drawing when the initial appearance or final frame of an instance's track is missed.
 ### Demo
 
-## Editing Identities
+## Editing Identities and Tracks
 The identities panel displays all existing identities in order of appearance. Each ID has a unique key that cannot be edited and an auto-generated or user-specified color. IDs are colored if they appear on the current frame and are white otherwise.
 
 Note that features and buttons involving tracks are most helpful once the bounding boxes have already been reviewed and corrected. Thus it is recommended to perfect boxes prior to merging or swapping tracks.
-### Features
-* __Highlight ID's box__ — Select a colored ID to create a thick outline on its corresponding box
+### Visual Features
+* __Highlight an ID's box__ — Select a colored ID to create a thick outline on its corresponding box
 
 * __Display ID's full segmented track__ — Select any ID to have the play bar display when the instance is (or is not) in frame
 
@@ -91,13 +91,13 @@ Note that features and buttons involving tracks are most helpful once the boundi
   * If both IDs are present on any given frame, then they will each keep their original ID on said frame
   * Unlike swap track, merging modifies tracks across the entire video
 ``` bash
-BEFORE                           BEFORE                       BEFORE 
-[A]:      ---                    [A]: --------  ---           [A]:      -----
-[B]: --         ------           [B]:    ----------           [B]: -----
+BEFORE                            BEFORE                        BEFORE 
+[A]:      ---                     [A]: --------  ---            [A]:      -----
+[B]: --         ------            [B]:    ----------            [B]: -----
 
-AFTER                            AFTER                        AFTER
-[A]:                             [A]:    -----  ---           [A]:         
-[B]: --   ---   ------           [B]: -------------           [B]: ----------
+AFTER                             AFTER                         AFTER
+[A]:                              [A]:    -----  ---            [A]:         
+[B]: --   ---   ------            [B]: -------------            [B]: ----------
 ```
 
 * __Customize ID Name/Color__ — Convert tracking IDs into real IDs by giving them distinct names and colors. These customizations will be saved for future edits such that the corresponding IDs will not receive default values. Each identity therefore stores the following:
