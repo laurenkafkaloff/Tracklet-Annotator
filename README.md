@@ -91,13 +91,13 @@ Note that features and buttons involving tracks are most helpful once the boundi
   * If both IDs are present on any given frame, then they will each keep their original ID on said frame
   * Unlike swap track, merging modifies tracks across the entire video
 ``` bash
-BEFORE                            BEFORE                        BEFORE 
-[A]:      ---                     [A]: --------  ---            [A]:      -----
-[B]: --         ------            [B]:    ----------            [B]: -----
+BEFORE                             BEFORE                          BEFORE 
+[A]:      ---                      [A]: --------  ---              [A]:      -----
+[B]: --         ------             [B]:    ----------              [B]: -----
 
-AFTER                             AFTER                         AFTER
-[A]:                              [A]:    -----  ---            [A]:         
-[B]: --   ---   ------            [B]: -------------            [B]: ----------
+AFTER                              AFTER                           AFTER
+[A]:                               [A]:    -----  ---              [A]:         
+[B]: --   ---   ------             [B]: -------------              [B]: ----------
 ```
 
 * __Customize ID Name/Color__ — Convert tracking IDs into real IDs by giving them distinct names and colors. These customizations will be saved for future edits such that the corresponding IDs will not receive default values. Each identity therefore stores the following:
@@ -112,4 +112,6 @@ AFTER                             AFTER                         AFTER
 ## Committing Edits
 **No changes will be saved for future edits if "Commit Edits" is not clicked.** This is essentially a save button for committing edits to a text file in your open directory. Only one text file will be generated and edited per opened video, so clicking the button multiple times will simply update your current working version.
 
-As the program currently has no undo button, it is recommended to commit edits frequently to preserve work. For the sake of version control, the original tracking file is left untouched in the main directory, and each editing session is stored chronologically in the "Edited Versions" folder. The program automatically opens the most recent version, so to rid of a session's edits, simply remove the file.
+Considering the program currently has no undo button, it is recommended to commit edits frequently to preserve work. For the sake of version control, the original tracking file is left untouched in the main directory, and each editing session is stored chronologically in the "Edited Versions" folder. The program automatically opens the most recent version, so to rid of a session's edits, simply remove the file.
+
+As a safeguard, if the window is closed while there are unsaved changes, the program will automatically create a restored file named "[video-file-name]\_restored\_-1". If this were to occur, upon reopening the video, the user will be prompted to either open the restored file or the most recently saved one. The restored file will be deleted as soon as any edits are committed.
