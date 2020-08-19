@@ -1,6 +1,7 @@
 
 from Annotator.videoPlayer import *
 
+
 class barId(object):
 
     def __init__(self, id, top, s):
@@ -34,9 +35,9 @@ class barId(object):
 
     def shift(self, frameNum):
         if self.top:
-            height = self.s.play_h * 3.5/12.0 + 10
+            height = self.s.play_h * 3.5 / 12.0 + 10
         else:
-            height = self.s.play_h * 8.5/12.0 + 10
+            height = self.s.play_h * 8.5 / 12.0 + 10
 
         for box in self.boxes:
             self.s.cvs_playBar.delete(box)
@@ -44,15 +45,16 @@ class barId(object):
         for i in range(0, len(self.ends) - 1, 2):
             tail = self.ends[i]
             head = self.ends[i + 1]
-            if tail > frameNum + self.s.play_total_frames_on_bar/2:
+            if tail > frameNum + self.s.play_total_frames_on_bar / 2:
                 break
-            if head < frameNum - self.s.play_total_frames_on_bar/2:
+            if head < frameNum - self.s.play_total_frames_on_bar / 2:
                 continue
             tail = self.barFindLine(tail, frameNum)
             head = self.barFindLine(head, frameNum)
-            self.boxes.append(self.s.cvs_playBar.create_rectangle(tail, height-2.5, head, height+2.5, fill=self.instance.color, outline="black", width=.2))
+            self.boxes.append(self.s.cvs_playBar.create_rectangle(tail, height - 2.5, head,
+                                                                  height + 2.5, fill=self.instance.color, outline="black", width=.2))
 
     def barFindLine(self, num, curr):
-        middle = self.s.play_w/2
+        middle = self.s.play_w / 2
         line = max(self.s.play_0, min(middle + self.s.play_x * (num - curr), self.s.play_2))
         return line
