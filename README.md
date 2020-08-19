@@ -1,7 +1,7 @@
 # Tracklet Annotator
 Tracklet Annotator is a bounding box annotation tool for modifying auto-generated instance tracks on videos. It is written in Python and uses Tkinter for the graphical interface and OpenCV for video processing. 
 
-The tool is intended to be used after a multi-object track finding algorithm has  already been applied, and thus takes in a video and text file containing frame-level bounding box coordinates as input. That being said, it can also be used to manually draw and label tracks without prior detection.
+The tool is intended to be used after a multi-object track finding algorithm (_to be implemented_) has already been applied, and thus takes in a video and text file containing frame-level bounding box coordinates as input. That being said,it can also be used to manually draw and label tracks without prior detection.
 
 ### Features
 * Drawing tool for creating and deleting bounding boxes
@@ -91,7 +91,7 @@ Note that features and buttons involving tracks are most helpful once the boundi
 
 [![](https://i.postimg.cc/wj2MQCvC/ezgif-com-video-to-gif-2.gif)](https://postimg.cc/yDJ7Vr0j)
 
-## Button Descriptions
+### Button Descriptions
 * __Swap Track IDs__ — This button will swap two tracks starting from the current frame. That is, all prior bounding boxes will maintain their current identity while all following will switch to the other. When one instance gets in the way of another, it is common for auto-generated tracks to mistakenly swap their identities once the occlusion subsides. This results in a consecutive series of frames with misidentified boxes. To make the most out of this feature, go to the initial frame when the tracks are swapped and then apply it. 
 
 _Below are some examples of swapping tracks [A] and [B] (let the vertical line mark the current frame)_
