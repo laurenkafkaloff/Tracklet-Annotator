@@ -8,10 +8,12 @@ The tool is intended to be used after a multi-object track finding algorithm has
 * Memory-efficient video player for frame-level analysis
 * Built-in dialog box for displaying instructions, tracking progress, and confirming edits
 * Functions to handle identity swaps and tracklet merging
-* Play bar to display and compare when 0-2 identities appear in frame 
+* Play bar to display and compare when zero to two identities appear in frame 
 * Option for customizing identity names and colors
 
+[![Demo1.png](https://i.postimg.cc/zBNdd3q0/Demo1.png)](https://postimg.cc/Tykq1dLD)
 
+### Live Demo: [ ]
 ## Installation
 
 Use the package manager [pip](https://pip.pypa.io/en/stable/) to install the following modules via terminal:
@@ -58,7 +60,6 @@ Start by clicking "Open Directory" to select the directory containing your desir
 ```bash
 self.fwdSize, self.bkdSize = 20, 30
 ```
-
 _Bug: Occassionally frame data and displayed images will become offset by one. To fix, commit changes (described below) and reopen video._
  
 ## Editing Bounding Boxes
@@ -70,9 +71,10 @@ All button instructions and confirmations are printed in the built-in dialog box
 
 * __Redraw Box__ — This button combines "Delete" → "Create new" in order to make it easier to perfect the outline of boxes on correctly detected identities.
 
+[![](https://i.postimg.cc/ZKD6xvMP/ezgif-com-video-to-gif-1.gif)](https://postimg.cc/D8LW20Fm)
+
 * __Cancel__ — The cancel button and \<esc\> terminate all current actions at any time. 
 * __Show Previous/Next Boxes__ — Selecting these checkboxes will thinly draw previous/next-frame boxes onto the current frame. It will also highlight the appearing IDs in red/green in the identities panel. The purpose of this feature is to ease the process of drawing when the initial appearance or final frame of an instance's track is missed.
-### Demo
 
 ## Editing Identities and Tracks
 The identities panel displays all existing identities in order of appearance. Each ID has a unique key that cannot be edited and an auto-generated or user-specified color. IDs are colored if they appear on the current frame and are white otherwise.
@@ -81,23 +83,42 @@ Note that features and buttons involving tracks are most helpful once the boundi
 ### Visual Features
 * __Highlight an ID's box__ — Select a colored ID to create a thick outline on its corresponding box
 
+[![ezgif-com-video-to-gif-3.gif](https://i.postimg.cc/mkWTsjk3/ezgif-com-video-to-gif-3.gif)](https://postimg.cc/BLpr5xxt)
+
 * __Display ID's full segmented track__ — Select any ID to have the play bar display when the instance is (or is not) in frame
 
 * __Compare two tracks__ — Select two IDs to compare when the two instances are in frame. Auto-generated tracks will categorize an object that leaves and re-enters a frame as two separate instances. These instances will have no overlapping frames (as they are the same object) and their tracks will eventually want to be merged. It is for this scenario that this feature is most helpful.
-### Button Descriptions
-* __Swap Track IDs__ — This button will swap two tracks starting from the current frame. That is, all prior bounding boxes will maintain their current identity while all following will switch to the other. When one instance gets in the way of another, it is common for auto-generated tracks to mistakenly swap their identities once the occlusion subsides. This results in a consecutive series of frames with misidentified boxes. To make the most out of this feature, go to the initial frame when the tracks are swapped and then apply it.
 
-* __Merge Tracks into One ID__ — Merging tracks is helpful for the same scenario described in "Compare Two Tracks." Say you have an ID named [B] who has most of its track fleshed out. However, at some point it leaves and reenters the frame, labeled as a different ID [A]. Below are some examples of how variations of [A] and [B] would be merged. Note the following:
+[![](https://i.postimg.cc/wj2MQCvC/ezgif-com-video-to-gif-2.gif)](https://postimg.cc/yDJ7Vr0j)
+
+## Button Descriptions
+* __Swap Track IDs__ — This button will swap two tracks starting from the current frame. That is, all prior bounding boxes will maintain their current identity while all following will switch to the other. When one instance gets in the way of another, it is common for auto-generated tracks to mistakenly swap their identities once the occlusion subsides. This results in a consecutive series of frames with misidentified boxes. To make the most out of this feature, go to the initial frame when the tracks are swapped and then apply it. 
+
+_Below are some examples of swapping tracks [A] and [B] (let the vertical line mark the current frame)_
+``` bash
+BEFORE                             BEFORE                          BEFORE
+[A]:      |---                     [A]: -----|---  ---             [A]: |----------     
+[B]: --   |      ------            [B]:    --|--------             [B]: |
+          |                                  |                          |
+AFTER     |                        AFTER     |                     AFTER|
+[A]:      |      ------            [A]: -----|--------             [A]: |        
+[B]: --   |---                     [B]:    --|---  ---             [B]: |----------
+```
+
+* __Merge Tracks into One ID__ — Merging tracks is helpful for the same scenario described in "Compare Two Tracks." Say you have an ID named [B] who has most of its track fleshed out. However, at some point it leaves and reenters the frame, labeled as a different ID [A]. Note the following:
   * If both IDs are present on any given frame, then they will each keep their original ID on said frame
   * Unlike swap track, merging modifies tracks across the entire video
+
+_Below are some examples of merging tracks [A] and [B]_
+
 ``` bash
 BEFORE                             BEFORE                          BEFORE 
-[A]:      ---                      [A]: --------  ---              [A]:      -----
-[B]: --         ------             [B]:    ----------              [B]: -----
+[A]:      ---                      [A]: --------  ---              [A]:       ------
+[B]: --         ------             [B]:    ----------              [B]: ------
 
 AFTER                              AFTER                           AFTER
 [A]:                               [A]:    -----  ---              [A]:         
-[B]: --   ---   ------             [B]: -------------              [B]: ----------
+[B]: --   ---   ------             [B]: -------------              [B]: ------------
 ```
 
 * __Customize ID Name/Color__ — Convert tracking IDs into real IDs by giving them distinct names and colors. These customizations will be saved for future edits such that the corresponding IDs will not receive default values. Each identity therefore stores the following:
@@ -106,8 +127,6 @@ AFTER                              AFTER                           AFTER
   * Color: String (hex color code or pre-defined color)
 
 * __New ID__ — New ID will create a new unique key that is one more than the greatest existing key. New IDs will initialize with zero bounding boxes, and if left this way, these IDs will not be saved for future edits.
-### Demo
-
 
 ## Committing Edits
 **No changes will be saved for future edits if "Commit Edits" is not clicked.** This is essentially a save button for committing edits to a text file in your open directory. Only one text file will be generated and edited per opened video, so clicking the button multiple times will simply update your current working version.
