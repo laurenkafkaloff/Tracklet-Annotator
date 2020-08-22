@@ -1,5 +1,5 @@
 # Tracklet Annotator
-Tracklet Annotator is a bounding box annotation tool for modifying auto-generated instance tracks on videos. It is written in Python and uses Tkinter for the graphical interface and OpenCV for video processing. 
+Tracklet Annotator is a bounding box annotation tool for modifying and correcting auto-generated instance tracks on videos. It is written in Python and uses Tkinter for the graphical interface and OpenCV for video processing. 
 
 The tool is intended to be used after a multi-object track finding algorithm (_to be implemented_) has already been applied, and thus takes in a video and text file containing frame-level bounding box coordinates as input. That being said,it can also be used to manually draw and label tracks without prior detection.
 
