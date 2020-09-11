@@ -56,7 +56,7 @@ class Annotator():
         self.window = Tk()
         self.window.title("Tracklet Annotator")
         self.window.wm_protocol("WM_DELETE_WINDOW", self.onClose)
-        width = self.window.winfo_screenwidth() - 150
+        width = self.window.winfo_screenwidth() - 150 # modify to manually set window dimensions
         self.width = width
         self.img_width = width - self.leftPanelWidth - self.border
         self.window.minsize(self.width, self.height)
@@ -121,10 +121,12 @@ class Annotator():
         self.ckb_prev = tk.Checkbutton(master=self.frm_editor, text="Show previous boxes", variable=self.p, command=self.showPrev)
         self.ckb_next = tk.Checkbutton(master=self.frm_editor, text="Show next boxes", variable=self.n, command=self.showNext)
         self.btn_commit = tk.Button(master=self.frm_checkboxes, text="Commit Edits", command=self.commitEdits)
+        self.btn_reload = tk.Button(master=self.frm_checkboxes, text="Commit and Reload", command=self.reload)
         self.ckb_prev.grid(sticky=S + W, row=5, column=0)
         self.ckb_next.grid(sticky=S + W, row=6, column=0)
         self.frm_editor.grid_rowconfigure(5, minsize=30)
         self.btn_commit.grid(sticky=S + W, row=2, column=0)
+        self.btn_reload.grid(sticky=S + W, row=3, column=0)
         # Place
         self.frm_editor.grid(sticky=N + W, row=0, column=0)
         self.frm_labeler.grid(sticky=N + W, row=1, column=0)
@@ -137,8 +139,9 @@ class Annotator():
         # Header
         self.frm_toolbar = tk.Frame(master=self.frm_main, bg=col_main)
         self.btn_open = tk.Button(master=self.frm_toolbar, text="Open Directory", command=self.openDir, highlightbackground=col_main, borderwidth=6)
-        self.lbl_fileLoaded = tk.Label(master=self.frm_toolbar, text="  No file loaded", bg=col_main)
-        self.lbl_fileFrames = tk.Label(master=self.frm_toolbar, text="  Total frames: ", bg=col_main)
+        self.btn_setTime = tk.Button(master=self.frm_toolbar, text="Set Frame/Time", command=self.setTime, highlightbackground=col_main, borderwidth=6)
+        self.lbl_fileLoaded = tk.Label(master=self.frm_toolbar, text="  No file loaded", bg=col_main, font=(None, 10))
+        self.lbl_fileFrames = tk.Label(master=self.frm_toolbar, text="  Total frames: ", bg=col_main, font=(None, 10))
         self.btn_open.grid(row=0, column=0, sticky=SW)
         self.lbl_fileLoaded.grid(row=1, column=0, sticky=NW)
         self.lbl_fileFrames.grid(row=2, column=0, sticky=NW)
@@ -160,13 +163,13 @@ class Annotator():
                                      height=self.playBar_height, bg=col_main, highlightthickness=0, border=3)
         # Place
         self.frm_toolbar.grid_columnconfigure(0, minsize=300)
-        self.frm_toolbar.grid_columnconfigure(1, minsize=300)
+        self.frm_toolbar.grid_columnconfigure(1, minsize=100)
         self.frm_toolbar.grid_columnconfigure(2, minsize=self.width - 800)
         self.frm_toolbar.grid(row=0, column=0, sticky=N + W + E)
         self.cvs_image.grid(row=1, column=0, sticky=N + W + E)
         self.cvs_playBar.grid(row=2, column=0, sticky=S + W + E, pady=0)
 
-        self.lbl_frameNum = tk.Label(master=self.frm_main, text=" Frame Number: ")
+        self.lbl_frameNum = tk.Label(master=self.frm_main, text=" Frame Number: ", font=(None, 10))
 
         # PLAYING VIDEO
         self.window.bind('<Left>', self.leftkey)
@@ -217,6 +220,8 @@ class Annotator():
         self.boxes = {}
         self.p = tk.IntVar()
         self.n = tk.IntVar()
+        self.entryTime = tk.StringVar()
+        self.entryFrame = tk.IntVar()
         self.minBoxSize = 10
         self.allInstances = {}  # { id : instance }
         self.colorSetter = ColorSetter()
@@ -265,6 +270,50 @@ class Annotator():
         self.openingVideo = False
 
 # EDITOR MODE
+    def setTime(self):
+        self.topLevelOpen = True
+        self.win = Toplevel()
+
+        # Display
+        self.win.geometry("+%d+%d" % (self.width / 2, self.height / 2))
+        self.win.minsize(width=300, height=25)
+        self.win.grid_columnconfigure(0, weight=1, minsize=45)
+        self.win.grid_columnconfigure(1, weight=1)
+        self.win.grid_rowconfigure(0, weight=1)
+        self.win.grid_rowconfigure(1, weight=1)
+        self.win.grid_rowconfigure(2, weight=1)
+
+        # Features
+        self.win.title("Set Time OR Frame")
+        time = getTime(self, self.curr.frameNum)
+        self.entryTime = tk.StringVar(self.window, value=time)
+        self.entryFrame = tk.IntVar(self.window, value=self.curr.frameNum)
+        Label(self.win, text=" Set time: ").grid(row=0, column=0, columnspan=2, sticky=W)
+        Entry(self.win, textvariable=self.entryTime).grid(row=0, column=1, sticky=W)
+        Label(self.win, text=" Set frame: ").grid(row=1, column=0, columnspan=2, sticky=W)
+        Entry(self.win, textvariable=self.entryFrame).grid(row=1, column=1, sticky=W)
+        Button(self.win, text='Confirm', command=self.setTimeConfirm).grid(row=2, column=1)
+        Button(self.win, text='Cancel', command=self.setTimeCancel).grid(row=2, column=0)
+
+    def setTimeCancel(self):
+        self.win.destroy()
+        self.topLevelOpen = False
+
+    def setTimeConfirm(self):
+        # check if frame is dif than self.curr.frameNum
+
+        # else check if time is dif than getTime(curr frame num)
+            # call reload on frame
+
+        # have video player run until it gets to frame
+
+        # destroy window
+        self.topLevelOpen = False
+        self.win.destroy()
+
+    def reload(self):
+        pass
+
     def showPrev(self):
         if self.prev_on:
             self.prev_on = False
@@ -828,6 +877,7 @@ class Annotator():
         self.cvs_image.delete('all')
         if self.list_ids.size() != 0:
             self.list_ids.delete('0', 'end')
+        self.btn_setTime.grid(row=0, column=0)
         openVideo(self)
 
     def confirm1(self, event):
@@ -1069,7 +1119,8 @@ class Annotator():
             self.list_dialog.delete(last)
             self.addTodialog(msg)
         except:
-            print("Failed to restore edits.")
+            if not self.firstVideo:
+                print("Failed to restore edits.")
 
     # WINDOW CASES
 

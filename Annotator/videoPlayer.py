@@ -52,6 +52,11 @@ def setDimsAndMultipliers(self):
 
     makePlayBar(self)
 
+def getTime(self, frame):
+    vid_seconds = frame / self.vid_fps
+    vid_min = int(vid_seconds / 60)
+    vid_sec = int(vid_seconds - vid_min * 60)
+    return f"{vid_min} min {vid_sec} sec"
 
 def makePlayBar(self):
     self.play_w = self.cvs_image.winfo_width()  # 1090
@@ -146,6 +151,8 @@ def processIncoming(self):
             self.next()
         except:
             pass
+    else:
+        self.list_dialog.yview(0)
 
 
 def checkThread(self):
