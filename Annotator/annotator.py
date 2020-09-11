@@ -31,10 +31,10 @@ class Annotator():
         self.dialog_height, self.dialog_width = 45, 600
         self.playBar_height = 55
         self.leftPanelWidth = 200
-        self.leftPanelHeight_Editor = 220
-        self.leftPanelHeight_Row1 = 10
+        self.leftPanelHeight_Editor = 210
+        self.leftPanelHeight_Row1 = 8
         self.leftPanelHeight_Row2 = 50
-        self.leftPanelHeight_Labeler = 150
+        self.leftPanelHeight_Labeler = 180
 
         self.displayedIdent1Height = 15
         self.displayedIdent2Height = 15
@@ -54,7 +54,7 @@ class Annotator():
     # Display
         # WINDOW
         self.window = Tk()
-        self.window.title("Annotator")
+        self.window.title("Tracklet Annotator")
         self.window.wm_protocol("WM_DELETE_WINDOW", self.onClose)
         width = self.window.winfo_screenwidth() - 150
         self.width = width
@@ -98,11 +98,15 @@ class Annotator():
         self.lbl_labelerHeader = tk.Label(master=self.frm_labeler, text="Identity Editor", bg=col_leftPanel, width=int(self.leftPanelWidth / 10))
         self.btn_swapId = tk.Button(master=self.frm_labeler, text="Swap track IDs", command=self.changeId)
         self.btn_mergeId = tk.Button(master=self.frm_labeler, text="Merge tracks into one ID", command=self.mergeId)
+        self.btn_uniteId = tk.Button(master=self.frm_labeler, text="Unite boxes into one ID", command=self.uniteId)
+        self.btn_deleteId = tk.Button(master=self.frm_labeler, text="Delete track and ID", command=self.deleteId)
         self.btn_nameId = tk.Button(master=self.frm_labeler, text="Customize ID name/color", command=self.nameId)
         self.lbl_labelerHeader.grid(sticky=N + W, row=0, column=0)
         self.btn_swapId.grid(sticky=S + W, row=1, column=0)
         self.btn_mergeId.grid(sticky=S + W, row=2, column=0)
-        self.btn_nameId.grid(sticky=S + W, row=3, column=0)
+        self.btn_uniteId.grid(sticky=S + W, row=3, column=0)
+        self.btn_deleteId.grid(sticky=S + W, row=4, column=0)
+        self.btn_nameId.grid(sticky=S + W, row=5, column=0)
         # Identity Panel
         self.frm_identities = tk.Frame(master=self.frm_leftPanel, bg=col_leftPanel)
         self.lbl_allidheader = tk.Label(master=self.frm_identities, text=" All Identities", bg=col_leftPanel)
@@ -254,6 +258,8 @@ class Annotator():
         self.changingId = False
         self.mergingId = False
         self.namingId = False
+        self.unitingId = False
+        self.deletingId = False
         self.gettingSecondId = False
         self.waitingForClick = False
         self.openingVideo = False
@@ -293,56 +299,56 @@ class Annotator():
             self.boxes_next = {}
 
     # LEFT PANEL BUTTONS
-    def newBox(self):
+    def resetFunc(self):
         if self.firstVideo:
             return
         self.resetActions()
         if not self.boxes.get(self.lastSelectedId) is None:
             self.setNaturalBox(self.lastSelectedId)
+
+    def newBox(self):
+        self.resetFunc()
         self.addTodialog("Select an identity in the left panel")
         self.newingBox = True
 
     def deleteBox(self):
-        if self.firstVideo:
-            return
-        self.resetActions()
-        if not self.boxes.get(self.lastSelectedId) is None:
-            self.setNaturalBox(self.lastSelectedId)
+        self.resetFunc()
         self.addTodialog("Select a box to delete")
         self.deletingBox = True
         self.selectBox()
 
     def redrawBox(self):
-        if self.firstVideo:
-            return
-        self.resetActions()
-        if not self.boxes.get(self.lastSelectedId) is None:
-            self.setNaturalBox(self.lastSelectedId)
+        self.resetFunc()
         self.addTodialog("Select a box to redraw")
         self.redrawing = True
         self.selectBox()
 
     def changeId(self):
-        if self.firstVideo:
-            return
-        self.resetActions()
-        if not self.boxes.get(self.lastSelectedId) is None:
-            self.setNaturalBox(self.lastSelectedId)
+        self.resetFunc()
         self.addTodialog("Select the box of the first identity you'd like to swap")
         self.changingId = True
         self.selectBox()
 
     def mergeId(self):
-        if self.firstVideo:
-            return
-        self.resetActions()
-        if not self.boxes.get(self.lastSelectedId) is None:
-            self.setNaturalBox(self.lastSelectedId)
+        self.resetFunc()
         self.addTodialog("--------------------------------------------------------")
         self.addTodialog("Merging branch ID [A] onto master ID [B],")
         self.addTodialog("with any overlapping/conflicting frames stored on [A]")
         self.addTodialog("Select an identity from the left panel to be branch ID [A]")
         self.mergingId = True
+
+    def uniteId(self):
+        self.resetFunc()
+        self.addTodialog("--------------------------------------------------------")
+        self.addTodialog("Uniting boxes of [A] and [B] onto [B]")
+        self.addTodialog("Select an identity from the left panel to be ID [A]")
+        self.unitingId = True
+
+    def deleteId(self):
+        self.resetFunc()
+        self.addTodialog("Select an identity from the left panel or a box to delete the track")
+        self.deletingId = True
+        self.selectBox()
 
     def nameId(self):
         if self.firstVideo:
@@ -511,9 +517,27 @@ class Annotator():
                 self.gettingSecondId = True
                 self.addTodialog("Select an identity from the left panel to be master ID [B]")
 
+        elif self.unitingId:
+            if self.gettingSecondId:
+                if id is not self.firstId:
+                    self.secondId = id
+                    self.gettingSecondId = False
+                    self.addTodialog(f"Uniting boxes from #{self.firstId} and #{self.secondId} ...", True)
+                else:
+                    self.addTodialog("The selected identity was the same as the first identity -- please select again")
+            else:
+                self.firstId = id
+                self.gettingSecondId = True
+                self.addTodialog(f"Select an identity from the left panel to unite with #{self.firstId}")
+
         elif self.namingId:
             self.curr_id = id
             self.idDetails()
+
+        elif self.deletingId:
+            self.curr_id = id
+            self.selectingBox = False
+            self.addTodialog(f"Deleting track and ID for #{self.curr_id} ...", True)
 
         elif self.gettingSecondId:
             for i in self.curr.instances.keys():
@@ -657,6 +681,11 @@ class Annotator():
                 elif self.deletingBox:
                     self.addTodialog("Deleting box for ID #" + str(self.curr_id) + " ...", True)
                     self.selectingBox = False
+
+                elif self.deletingId:
+                    self.addTodialog(f"Deleting track and ID for #{self.curr_id} ...", True)
+                    self.selectingBox = False
+
             else:
                 self.addTodialog("No box is currently highlighted - please select again")
 
@@ -697,9 +726,22 @@ class Annotator():
             self.updateTempFrame(self.firstId)  # update short term storage frame
             self.updateTempFrame(self.secondId)
 
+        elif self.unitingId:
+            a = self.allInstances[self.firstId]
+            b = self.allInstances[self.secondId]
+            a.uniteId(b, self.curr.frameNum, self.frames, self.idsHaveChanged)  # update long term storage frames
+            self.updateTempFrame(self.firstId)  # update short term storage frame
+            self.updateTempFrame(self.secondId)
+
         elif self.redrawing or self.newingBox:
             id = self.allInstances[str(self.curr_id)]
             id.updateBoxes(self.curr_box, self.curr, 1)
+            self.updateTempFrame(self.curr_id)
+
+        elif self.deletingId:
+            id = self.allInstances[str(self.curr_id)]
+            id.deleteId(self.frames)
+            self.idsHaveChanged.append(self.curr_id)
             self.updateTempFrame(self.curr_id)
 
         self.curr_id = None

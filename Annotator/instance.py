@@ -107,6 +107,46 @@ class Instance(object):
 
         a.maxFrame = tempmax
 
+    def uniteId(self, second, frameNum, frames, idsHaveChanged):
+            # frame will store all instances on it in a dictionary { instance: box }
+            a = self
+            b = second
+            tempmax = -1
+
+            idsHaveChanged.append(a)
+            idsHaveChanged.append(b)
+
+            keys = copy.deepcopy(list(a.boxes.keys()))
+            for key in keys:
+                key = int(key)
+                a_short = a.boxes.get(key)
+                b_short = b.boxes.get(key)
+                a_long = frames[key].instances.get(a.id)
+
+                if b_short is None:
+                    a_short['color'] = str(b.color)
+                    a_long['color'] = str(b.color)
+
+                    b.boxes[key] = a_short
+                    frames[key].instances[b.id] = a_long
+                else:
+                    x1 = min(a_short['x1'], b_short['x1'])
+                    x2 = max(a_short['x2'], b_short['x2'])
+                    y1 = min(a_short['y1'], b_short['y1'])
+                    y2 = max(a_short['y2'], b_short['y2'])
+
+                    b.boxes[key] = {"x1": x1, "y1": y1, "x2": x2, "y2": y2, "color": self.color}
+                    frames[key].instances[b.id] = b.boxes[key]
+
+                a.boxes.pop(key)
+                frames[key].instances.pop(a.id)
+
+    def deleteId(self, frames):
+        for key in self.boxes:
+            if frames[key].instances.get(self.id) is not None:
+                frames[key].instances.pop(self.id)
+        self.boxes = {}
+
     def cleanBox(self, box):
         # box = { x1, y1, x2, y2, color }
         # make the box go from top left to bottom right
