@@ -54,9 +54,18 @@ def setDimsAndMultipliers(self):
 
 def getTime(self, frame):
     vid_seconds = frame / self.vid_fps
-    vid_min = int(vid_seconds / 60)
-    vid_sec = int(vid_seconds - vid_min * 60)
-    return f"{vid_min} min {vid_sec} sec"
+    vid_hour = int(vid_seconds / 3600)
+    vid_min = int((vid_seconds - vid_hour * 60) / 60)
+    vid_sec = int(vid_seconds - vid_min * 60 - vid_hour * 60)
+    vid_hour_str = "{:02d}".format(vid_hour)
+    vid_min_str = "{:02d}".format(vid_min)
+    vid_sec_str = "{:02d}".format(vid_sec)
+    return f"{vid_hour_str}:{vid_min_str}:{vid_sec_str}"
+
+def getFrame(self, time):
+    ###############################
+    seconds = None # parse hour:min:sec and convert it into seconds
+    return seconds * self.vid_fps
 
 def makePlayBar(self):
     self.play_w = self.cvs_image.winfo_width()  # 1090
@@ -78,9 +87,10 @@ def shiftBar(self, frameNum):
     self.play_2 = min(self.play_w, self.play_w / 2 + self.play_x * (self.vid_totalFrames - 1) - self.play_x * (frameNum - 1))
     self.play_3 = self.play_1 + self.play_h
 
-    if self.bar is not None:
-        self.cvs_playBar.delete(self.bar)
-    self.bar = self.cvs_playBar.create_rectangle(self.play_0, self.play_1, self.play_2, self.play_3, fill='white', outline='black', width=2)
+    if self.bar:
+        self.cvs_playBar.coords(self.bar, self.play_0, self.play_1, self.play_2, self.play_3)
+    else:
+        self.bar = self.cvs_playBar.create_rectangle(self.play_0, self.play_1, self.play_2, self.play_3, fill='white', outline='black', width=2)
 
     shiftHeadTail(self, frameNum)
 
@@ -100,14 +110,16 @@ def barFindLine(self, num):
 
 def shiftHeadTail(self, frameNum):
     line = barFindLine(self, self.head)
-    if self.bar_head is not None:
-        self.cvs_playBar.delete(self.bar_head)
-    self.bar_head = self.cvs_playBar.create_line(line, self.play_1, line, self.play_3)
+    if self.bar_head:
+        self.cvs_playBar.coords(self.bar_head, line, self.play_1, line, self.play_3)
+    else:
+        self.bar_head = self.cvs_playBar.create_line(line, self.play_1, line, self.play_3)
 
     line = barFindLine(self, self.tail)
-    if self.bar_tail is not None:
-        self.cvs_playBar.delete(self.bar_tail)
-    self.bar_tail = self.cvs_playBar.create_line(line, self.play_1, line, self.play_3)
+    if self.bar_tail:
+        self.cvs_playBar.coords(self.bar_tail, line, self.play_1, line, self.play_3)
+    else:
+        self.bar_tail = self.cvs_playBar.create_line(line, self.play_1, line, self.play_3)
 
 
 def barAddId(self, i):
@@ -139,7 +151,7 @@ def frameToImage(self, freeze):
 def periodicCall(self):
     processIncoming(self)
     if self.playing:
-        self.cvs_image.after(int(1000 / self.vid_fps), periodicCall, self)
+        self.cvs_image.after(int(1000 / (2 * self.vid_fps)), periodicCall, self)
     else:
         self.queue = queue.Queue()
 

@@ -19,14 +19,19 @@ from Annotator.colors import ColorSetter
 from Annotator.videoPlayer import *
 from Annotator.barId import barId
 
+from multiprocessing.pool import ThreadPool
 
 class Annotator():
     # TODO: Set frame number, set playing speed
 
     def __init__(self):
+
+        threadn = cv2.getNumberOfCPUs()
+        self.pool = ThreadPool(processes = max([1, threadn - 2]))
+
         # Instance Variables
         # DISPLAY
-        self.width, self.height = 960, 770
+        self.width, self.height = 1024, 576 #2048, 1152
         self.border = 10
         self.dialog_height, self.dialog_width = 45, 600
         self.playBar_height = 55
@@ -56,9 +61,10 @@ class Annotator():
         self.window = Tk()
         self.window.title("Tracklet Annotator")
         self.window.wm_protocol("WM_DELETE_WINDOW", self.onClose)
-        width = self.window.winfo_screenwidth() - 150 # modify to manually set window dimensions
-        self.width = width
-        self.img_width = width - self.leftPanelWidth - self.border
+        # width = self.window.winfo_screenwidth() - 150 # modify to manually set window dimensions
+        # self.width = width
+        # self.img_width = width - self.leftPanelWidth - self.border
+        self.img_width = self.width - self.leftPanelWidth - self.border
         self.window.minsize(self.width, self.height)
         self.window.geometry(f"{self.width}x{self.height}")
 
@@ -121,7 +127,7 @@ class Annotator():
         self.ckb_prev = tk.Checkbutton(master=self.frm_editor, text="Show previous boxes", variable=self.p, command=self.showPrev)
         self.ckb_next = tk.Checkbutton(master=self.frm_editor, text="Show next boxes", variable=self.n, command=self.showNext)
         self.btn_commit = tk.Button(master=self.frm_checkboxes, text="Commit Edits", command=self.commitEdits)
-        self.btn_reload = tk.Button(master=self.frm_checkboxes, text="Commit and Reload", command=self.reload)
+        self.btn_reload = tk.Button(master=self.frm_checkboxes, text="Commit and Reload", command=self.commitReload)
         self.ckb_prev.grid(sticky=S + W, row=5, column=0)
         self.ckb_next.grid(sticky=S + W, row=6, column=0)
         self.frm_editor.grid_rowconfigure(5, minsize=30)
@@ -284,7 +290,7 @@ class Annotator():
         self.win.grid_rowconfigure(2, weight=1)
 
         # Features
-        self.win.title("Set Time OR Frame")
+        self.win.title("Jump to specific time/frame")
         time = getTime(self, self.curr.frameNum)
         self.entryTime = tk.StringVar(self.window, value=time)
         self.entryFrame = tk.IntVar(self.window, value=self.curr.frameNum)
@@ -300,19 +306,28 @@ class Annotator():
         self.topLevelOpen = False
 
     def setTimeConfirm(self):
-        # check if frame is dif than self.curr.frameNum
-
-        # else check if time is dif than getTime(curr frame num)
-            # call reload on frame
-
-        # have video player run until it gets to frame
-
-        # destroy window
+        frame = self.entryFrame.get()
+        time = self.entryTime.get()
+        if frame != self.curr.frameNum:
+            self.reload(frame)
+        elif time != getTime(self, self.curr.frameNum):
+            ###############################
+            self.reload(getFrame(self, time)) # getFrame needs to be coded in videoplayer
+        
         self.topLevelOpen = False
         self.win.destroy()
 
-    def reload(self):
-        pass
+    def commitReload(self):
+        self.commitEdits()
+        self.reload(self.curr.frameNum)
+
+    def reload(self, frame):
+        self.checking = True
+        ###############################
+        # should take new frame, reload self.video to go to frame - 1 then call next once loaded
+        # self.video.set(1, min(frame-2, 0))
+        # self.curr = self.frames[frame]
+        self.next()
 
     def showPrev(self):
         if self.prev_on:
@@ -392,6 +407,7 @@ class Annotator():
         self.addTodialog("Uniting boxes of [A] and [B] onto [B]")
         self.addTodialog("Select an identity from the left panel to be ID [A]")
         self.unitingId = True
+        self.selectBox()
 
     def deleteId(self):
         self.resetFunc()
@@ -721,6 +737,22 @@ class Annotator():
                         self.addTodialog("Select an identity from the left panel or a box to swap with ID #" + str(self.curr_id))
                         self.selectBox()
 
+                if self.unitingId:
+                    if self.gettingSecondId:
+                        if self.curr_id is not self.firstId:
+                            self.secondId = self.curr_id
+                            self.gettingSecondId = False
+                            self.selectingBox = False
+                            self.addTodialog(f"Uniting boxes from #{self.firstId} and #{self.secondId} ...", True)
+                        else:
+                            self.addTodialog("The selected identity was the same as the first identity -- please select again")
+                            self.selectBox()
+                    else:
+                        self.firstId = self.curr_id
+                        self.gettingSecondId = True
+                        self.addTodialog(f"Select an identity from the left panel to unite with #{self.firstId}")
+                        self.selectBox()
+
                 elif self.redrawing:
                     self.addTodialog("Draw new box for ID #" + str(self.curr_id))
                     self.cvs_image.delete(self.boxes[self.curr_id])
@@ -967,6 +999,28 @@ class Annotator():
             box['color'] = instance.color
             f.addInstance(id, box)
 
+    def update_box(self, id, box):
+        # if a box has already been created on the canvas, upadate it
+        # otherwise create a new one
+
+        if id in self.boxes:
+            self.cvs_image.coords(self.boxes[id], box['x1'], box['y1'], box['x2'], box['y2'])
+        else:
+            self.boxes[id] = self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(box['color']), width=3)
+
+        self.list_ids.itemconfig(self.allInstances[id].index, bg=box['color'])
+
+    def delete_unused_boxes(self):
+        # now delete the boxes that are no longer needed
+        boxes_to_delete = []
+        for id in self.boxes.keys():
+            if id not in self.curr.instances:
+                boxes_to_delete.append(id)
+                self.cvs_image.delete(self.boxes[id])
+                self.list_ids.itemconfig(self.allInstances[id].index, bg=self.col_light)
+        for id in boxes_to_delete:
+            del self.boxes[id]
+
     def loadNewFrame(self):
         # new image
         if self.displayedImage is None:
@@ -978,25 +1032,23 @@ class Annotator():
         self.lbl_frameNum.config(text="Frame Number: " + str(self.curr.frameNum))
         shiftBar(self, self.curr.frameNum)
 
-        # reset elements
-        for id in self.boxes.keys():
-            self.cvs_image.delete(self.boxes[id])
-            self.list_ids.itemconfig(self.allInstances[id].index, bg=self.col_light)
-        self.boxes = {}
+        # delete the boxes that are no longer needed
+        self.delete_unused_boxes()
 
         # new boxes
         box = None
         removeInstances = []
-        for id in self.curr.instances.keys():
+        for id, box in self.curr.instances.items():
             if id in self.idsHaveChanged:
                 if self.allInstances[id].boxes.get(self.curr.frameNum) is not None:
                     self.curr.addInstance(id, self.allInstances[id].boxes[self.curr.frameNum])
                 else:
                     removeInstances.append(id)
                     continue
-            box = self.curr.instances[id]
-            self.boxes[id] = self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(box['color']), width=3)
-            self.list_ids.itemconfig(self.allInstances[id].index, bg=box['color'])
+
+            # update boxes and list_ids color
+            self.pool.apply_async(self.update_box, (id, box))
+            
         for id in removeInstances:
             self.curr.removeInstance(id)
 

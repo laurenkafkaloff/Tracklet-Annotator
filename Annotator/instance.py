@@ -135,7 +135,7 @@ class Instance(object):
                     y1 = min(a_short['y1'], b_short['y1'])
                     y2 = max(a_short['y2'], b_short['y2'])
 
-                    b.boxes[key] = {"x1": x1, "y1": y1, "x2": x2, "y2": y2, "color": self.color}
+                    b.boxes[key] = {"x1": x1, "y1": y1, "x2": x2, "y2": y2, "color": b.color}
                     frames[key].instances[b.id] = b.boxes[key]
 
                 a.boxes.pop(key)
