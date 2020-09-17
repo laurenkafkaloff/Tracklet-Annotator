@@ -62,6 +62,11 @@ def getTime(self, frame):
     vid_sec_str = "{:02d}".format(vid_sec)
     return f"{vid_hour_str}:{vid_min_str}:{vid_sec_str}"
 
+def getFrame(self, time):
+    ###############################
+    seconds = None # parse hour:min:sec and convert it into seconds
+    return seconds * self.vid_fps
+
 def makePlayBar(self):
     self.play_w = self.cvs_image.winfo_width()  # 1090
     self.play_h = self.playBar_height / 2 + 15 / 2 - 10

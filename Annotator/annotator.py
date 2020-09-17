@@ -301,15 +301,12 @@ class Annotator():
 
     def setTimeConfirm(self):
         frame = self.entryFrame.get()
-        self.reload(frame)
-        # check if frame is dif than self.curr.frameNum
-
-        # else check if time is dif than getTime(curr frame num)
-            # call reload on frame
-
-        # have video player run until it gets to frame
-
-        # destroy window
+        time = self.entryTime.get()
+        if frame != self.curr.frameNum:
+            self.reload(frame)
+        elif time != getTime(self, self.curr.frameNum):
+            ###############################
+            self.reload(getFrame(self, time)) # getFrame needs to be coded in videoplayer
         self.topLevelOpen = False
         self.win.destroy()
 
@@ -319,9 +316,10 @@ class Annotator():
 
     def reload(self, frame):
         self.checking = True
-        self.video.set(1, min(frame-2, 0))
-        self.curr = self.frames[frame]
-        time.sleep(2)
+        ###############################
+        # should take new frame, reload self.video to go to frame - 1 then call next once loaded
+        # self.video.set(1, min(frame-2, 0))
+        # self.curr = self.frames[frame]
         self.next()
 
     def showPrev(self):
