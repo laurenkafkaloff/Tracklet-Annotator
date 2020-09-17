@@ -19,11 +19,16 @@ from Annotator.colors import ColorSetter
 from Annotator.videoPlayer import *
 from Annotator.barId import barId
 
+from multiprocessing.pool import ThreadPool
 
 class Annotator():
     # TODO: Set frame number, set playing speed
 
     def __init__(self):
+
+        threadn = cv2.getNumberOfCPUs()
+        self.pool = ThreadPool(processes = max([1, threadn - 2]))
+
         # Instance Variables
         # DISPLAY
         self.width, self.height = 960, 770
@@ -992,6 +997,28 @@ class Annotator():
             box['color'] = instance.color
             f.addInstance(id, box)
 
+    def update_box(self, id, box):
+        # if a box has already been created on the canvas, upadate it
+        # otherwise create a new one
+
+        if id in self.boxes:
+            self.cvs_image.coords(self.boxes[id], box['x1'], box['y1'], box['x2'], box['y2'])
+        else:
+            self.boxes[id] = self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(box['color']), width=3)
+
+        self.list_ids.itemconfig(self.allInstances[id].index, bg=box['color'])
+
+    def delete_unused_boxes(self):
+        # now delete the boxes that are no longer needed
+        boxes_to_delete = []
+        for id in self.boxes.keys():
+            if id not in self.curr.instances:
+                boxes_to_delete.append(id)
+                self.cvs_image.delete(self.boxes[id])
+                self.list_ids.itemconfig(self.allInstances[id].index, bg=self.col_light)
+        for id in boxes_to_delete:
+            del self.boxes[id]
+
     def loadNewFrame(self):
         # new image
         if self.displayedImage is None:
@@ -1003,25 +1030,23 @@ class Annotator():
         self.lbl_frameNum.config(text="Frame Number: " + str(self.curr.frameNum))
         shiftBar(self, self.curr.frameNum)
 
-        # reset elements
-        for id in self.boxes.keys():
-            self.cvs_image.delete(self.boxes[id])
-            self.list_ids.itemconfig(self.allInstances[id].index, bg=self.col_light)
-        self.boxes = {}
+        # delete the boxes that are no longer needed
+        self.delete_unused_boxes()
 
         # new boxes
         box = None
         removeInstances = []
-        for id in self.curr.instances.keys():
+        for id, box in self.curr.instances.items():
             if id in self.idsHaveChanged:
                 if self.allInstances[id].boxes.get(self.curr.frameNum) is not None:
                     self.curr.addInstance(id, self.allInstances[id].boxes[self.curr.frameNum])
                 else:
                     removeInstances.append(id)
                     continue
-            box = self.curr.instances[id]
-            self.boxes[id] = self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(box['color']), width=3)
-            self.list_ids.itemconfig(self.allInstances[id].index, bg=box['color'])
+
+            # update boxes and list_ids color
+            self.pool.apply_async(self.update_box, (id, box))
+            
         for id in removeInstances:
             self.curr.removeInstance(id)
 
