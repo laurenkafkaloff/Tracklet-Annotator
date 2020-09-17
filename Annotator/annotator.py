@@ -121,7 +121,7 @@ class Annotator():
         self.ckb_prev = tk.Checkbutton(master=self.frm_editor, text="Show previous boxes", variable=self.p, command=self.showPrev)
         self.ckb_next = tk.Checkbutton(master=self.frm_editor, text="Show next boxes", variable=self.n, command=self.showNext)
         self.btn_commit = tk.Button(master=self.frm_checkboxes, text="Commit Edits", command=self.commitEdits)
-        self.btn_reload = tk.Button(master=self.frm_checkboxes, text="Commit and Reload", command=self.reload)
+        self.btn_reload = tk.Button(master=self.frm_checkboxes, text="Commit and Reload", command=self.commitReload)
         self.ckb_prev.grid(sticky=S + W, row=5, column=0)
         self.ckb_next.grid(sticky=S + W, row=6, column=0)
         self.frm_editor.grid_rowconfigure(5, minsize=30)
@@ -284,7 +284,7 @@ class Annotator():
         self.win.grid_rowconfigure(2, weight=1)
 
         # Features
-        self.win.title("Set Time OR Frame")
+        self.win.title("Jump to specific time/frame")
         time = getTime(self, self.curr.frameNum)
         self.entryTime = tk.StringVar(self.window, value=time)
         self.entryFrame = tk.IntVar(self.window, value=self.curr.frameNum)
@@ -300,6 +300,8 @@ class Annotator():
         self.topLevelOpen = False
 
     def setTimeConfirm(self):
+        frame = self.entryFrame.get()
+        self.reload(frame)
         # check if frame is dif than self.curr.frameNum
 
         # else check if time is dif than getTime(curr frame num)
@@ -311,8 +313,16 @@ class Annotator():
         self.topLevelOpen = False
         self.win.destroy()
 
-    def reload(self):
-        pass
+    def commitReload(self):
+        self.commitEdits()
+        self.reload(self.curr.frameNum)
+
+    def reload(self, frame):
+        self.checking = True
+        self.video.set(1, min(frame-2, 0))
+        self.curr = self.frames[frame]
+        time.sleep(2)
+        self.next()
 
     def showPrev(self):
         if self.prev_on:
@@ -392,6 +402,7 @@ class Annotator():
         self.addTodialog("Uniting boxes of [A] and [B] onto [B]")
         self.addTodialog("Select an identity from the left panel to be ID [A]")
         self.unitingId = True
+        self.selectBox()
 
     def deleteId(self):
         self.resetFunc()
@@ -719,6 +730,22 @@ class Annotator():
                         self.firstId = self.curr_id
                         self.gettingSecondId = True
                         self.addTodialog("Select an identity from the left panel or a box to swap with ID #" + str(self.curr_id))
+                        self.selectBox()
+
+                if self.unitingId:
+                    if self.gettingSecondId:
+                        if self.curr_id is not self.firstId:
+                            self.secondId = self.curr_id
+                            self.gettingSecondId = False
+                            self.selectingBox = False
+                            self.addTodialog(f"Uniting boxes from #{self.firstId} and #{self.secondId} ...", True)
+                        else:
+                            self.addTodialog("The selected identity was the same as the first identity -- please select again")
+                            self.selectBox()
+                    else:
+                        self.firstId = self.curr_id
+                        self.gettingSecondId = True
+                        self.addTodialog(f"Select an identity from the left panel to unite with #{self.firstId}")
                         self.selectBox()
 
                 elif self.redrawing:

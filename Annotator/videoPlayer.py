@@ -54,9 +54,13 @@ def setDimsAndMultipliers(self):
 
 def getTime(self, frame):
     vid_seconds = frame / self.vid_fps
-    vid_min = int(vid_seconds / 60)
-    vid_sec = int(vid_seconds - vid_min * 60)
-    return f"{vid_min} min {vid_sec} sec"
+    vid_hour = int(vid_seconds / 3600)
+    vid_min = int((vid_seconds - vid_hour * 60) / 60)
+    vid_sec = int(vid_seconds - vid_min * 60 - vid_hour * 60)
+    vid_hour_str = "{:02d}".format(vid_hour)
+    vid_min_str = "{:02d}".format(vid_min)
+    vid_sec_str = "{:02d}".format(vid_sec)
+    return f"{vid_hour_str}:{vid_min_str}:{vid_sec_str}"
 
 def makePlayBar(self):
     self.play_w = self.cvs_image.winfo_width()  # 1090
