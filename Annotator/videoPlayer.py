@@ -50,6 +50,10 @@ def setDimsAndMultipliers(self):
     vid_sec = int(vid_seconds - vid_min * 60)
     self.vid_length = f"{vid_min} min {vid_sec} sec"
 
+    # slower playback rate if can't play real time
+    self.rate = 1
+    self.max_rate = 3
+
     makePlayBar(self)
 
 def getTime(self, frame):
@@ -63,9 +67,11 @@ def getTime(self, frame):
     return f"{vid_hour_str}:{vid_min_str}:{vid_sec_str}"
 
 def getFrame(self, time):
-    ###############################
-    seconds = None # parse hour:min:sec and convert it into seconds
-    return seconds * self.vid_fps
+    # parse hour:min:sec and convert it into seconds
+    ent_times = [int(tm) for tm in time.split(":")]
+    seconds = ent_times[0]*3600 + ent_times[1]*60 + ent_times[2]
+    return int(seconds * self.vid_fps)
+    
 
 def makePlayBar(self):
     self.play_w = self.cvs_image.winfo_width()  # 1090
@@ -151,7 +157,19 @@ def frameToImage(self, freeze):
 def periodicCall(self):
     processIncoming(self)
     if self.playing:
-        self.cvs_image.after(int(1000 / (2 * self.vid_fps)), periodicCall, self)
+        if self.head - self.curr.frameNum > int(3*self.fwdSize/4):
+            buffer_len = self.head - self.curr.frameNum + 600
+            desired_buffer_len = int(3*self.fwdSize/4) + 600
+            self.rate = min(self.rate*(buffer_len/desired_buffer_len), self.max_rate)
+            #print("inc: {:.3f}, rate: {:.3f}".format(buffer_len/desired_buffer_len, self.rate))
+            
+            self.cvs_image.after(int(1000 / (self.rate * self.vid_fps)), periodicCall, self)
+        else:
+            buffer_len = self.head - self.curr.frameNum + 300
+            desired_buffer_len = int(3*self.fwdSize/4) + 300
+            self.rate = self.rate*(buffer_len/desired_buffer_len)
+            #print("dec: {:.3f}, rate: {:.3f}".format(buffer_len/desired_buffer_len, self.rate))
+            self.cvs_image.after(int(1000 / (self.rate * self.vid_fps)), periodicCall, self)
     else:
         self.queue = queue.Queue()
 
@@ -168,9 +186,15 @@ def processIncoming(self):
 
 
 def checkThread(self):
-    self.head = 0
-    self.tail = 0
+    # self.head = 0
+    # self.tail = 0
     while True:
+        # newstring = "head:{} tail:{} fn: {} fwdSize: {} bkdSize: {} fwdStop: {} bkdStop: {} num_frames: {}, filling: {}".format(
+        #     self.head, self.tail, self.curr.frameNum, self.fwdSize, self.bkdSize, self.fwdStop, self.bkdStop,
+        #     len(self.frames), self.filling)
+        # if not self.printstring == newstring:
+        #     print(newstring)
+        #     self.printstring = newstring
         if self.stopChecker:
             self.stopChecker = False
             break
@@ -180,6 +204,7 @@ def checkThread(self):
             # NEXT CLICK
             while self.head - num < self.fwdSize and self.head < self.vid_totalFrames:
                 more, freeze = self.video.read()
+                #print("Checking: frame read at: {}".format(self.video.get(1)))
                 if more:
                     self.head += 1
                     self.img = frameToImage(self, freeze)
@@ -200,9 +225,10 @@ def checkThread(self):
                 self.tail += 1
 
         # PREV CLICK
-        if num - self.tail <= self.reloadBound and self.tail != 0:
+        if num - self.tail <= self.reloadBound and self.tail > 0: # self.tail != 0
             if self.bkdStop:
-                bkdReload(self, max(0, int(self.tail - self.bkdSize)), int(self.tail))
+                #bkdReload(self, max(0, int(self.tail - self.bkdSize)), int(self.tail))
+                bkdReload(self, max(0, int(num - self.bkdSize)), int(self.tail))
 
         if self.head - num >= self.fwdSize + self.bkdSize:
             if self.fwdStop:
@@ -210,6 +236,7 @@ def checkThread(self):
 
 
 def fwdReload(self, start=0, stop=0):
+    #print("Reloading Forward")
     self.fwdStop = False
     if not self.fwdStop:
         self.video.set(1, start)
@@ -223,12 +250,13 @@ def fwdReload(self, start=0, stop=0):
 
 def bkdReload(self, start=0, stop=0):
     self.bkdStop = False
-    video = cv2.VideoCapture(self.videoFileName)
+    #video = cv2.VideoCapture(self.videoFileName)
     count = start
     if not self.bkdStop:
-        video.set(1, start - 1)
+        self.video.set(1, start - 1)
         while count < stop:
-            more, freeze = video.read()
+            more, freeze = self.video.read()
+            #print("Backward: frame read at: {}".format(self.video.get(1)))
             self.img = frameToImage(self, freeze)
             self.frames[count].img = self.img
             self.loadNewBoxes(count)
