@@ -19,14 +19,19 @@ from Annotator.colors import ColorSetter
 from Annotator.videoPlayer import *
 from Annotator.barId import barId
 
+from multiprocessing.pool import ThreadPool
 
 class Annotator():
     # TODO: Set frame number, set playing speed
 
     def __init__(self):
+
+        threadn = cv2.getNumberOfCPUs()
+        self.pool = ThreadPool(processes = max([1, threadn - 2]))
+
         # Instance Variables
         # DISPLAY
-        self.width, self.height = 960, 770
+        self.width, self.height = 1440, 1155 #960, 770
         self.border = 10
         self.dialog_height, self.dialog_width = 45, 600
         self.playBar_height = 55
@@ -56,9 +61,9 @@ class Annotator():
         self.window = Tk()
         self.window.title("Tracklet Annotator")
         self.window.wm_protocol("WM_DELETE_WINDOW", self.onClose)
-        width = self.window.winfo_screenwidth() - 150 # modify to manually set window dimensions
-        self.width = width
-        self.img_width = width - self.leftPanelWidth - self.border
+        #self.width = self.window.winfo_screenwidth() - 150 # uncomment to set window dimensions automatically
+        #self.height = self.window.winfo_screenheight() - 150 # uncomment to set window dimensions automatically
+        self.img_width = self.width - self.leftPanelWidth - self.border
         self.window.minsize(self.width, self.height)
         self.window.geometry(f"{self.width}x{self.height}")
 
@@ -305,8 +310,13 @@ class Annotator():
         if frame != self.curr.frameNum:
             self.reload(frame)
         elif time != getTime(self, self.curr.frameNum):
-            ###############################
-            self.reload(getFrame(self, time)) # getFrame needs to be coded in videoplayer
+            try:
+                newframe = getFrame(self, time)
+            except:
+                self.addTodialog("Time formatted incorrectly, try again.")
+                self.setTimeCancel()
+            else:
+                self.reload(newframe)
         self.topLevelOpen = False
         self.win.destroy()
 
@@ -315,12 +325,32 @@ class Annotator():
         self.reload(self.curr.frameNum)
 
     def reload(self, frame):
-        self.checking = True
         ###############################
         # should take new frame, reload self.video to go to frame - 1 then call next once loaded
-        # self.video.set(1, min(frame-2, 0))
-        # self.curr = self.frames[frame]
-        self.next()
+        if self.checker is not None:
+            self.stopChecker = True
+        
+        self.video.set(1, max(frame-1, 0))
+
+        # case for sudden jump to distant frame past annotated region (need to build up self.frames to that point)
+        if frame > len(self.frames):
+            tempnum = self.frames[-1].frameNum + 1
+            while tempnum <= frame:
+                self.f = Frame(frameNum=tempnum, img=None)
+                self.frames.append(self.f)
+                tempnum += 1
+
+        self.curr = self.frames[frame]
+        self.tail = self.curr.frameNum
+        self.head = self.curr.frameNum
+
+        self.filling = True
+        self.checker = threading.Thread(target=checkThread, args=(self, ))
+        self.checker.daemon = True
+        self.checking = True
+        self.checker.start()
+
+        time.sleep(.01)
 
     def showPrev(self):
         if self.prev_on:
@@ -833,10 +863,12 @@ class Annotator():
 
     # DISPLAY
     def leftkey(self, event):
-        self.prev()
+        if self.curr.frameNum - self.tail > int(self.bkdSize/4):
+            self.prev()
 
     def rightkey(self, event):
-        self.next()
+        if self.head - self.curr.frameNum > int(self.fwdSize/2):
+            self.next()
 
     def space(self, event):
         self.playBtn()
@@ -992,6 +1024,28 @@ class Annotator():
             box['color'] = instance.color
             f.addInstance(id, box)
 
+    def update_box(self, id, box):
+        # if a box has already been created on the canvas, upadate it
+        # otherwise create a new one
+
+        if id in self.boxes:
+            self.cvs_image.coords(self.boxes[id], box['x1'], box['y1'], box['x2'], box['y2'])
+        else:
+            self.boxes[id] = self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(box['color']), width=3)
+
+        self.list_ids.itemconfig(self.allInstances[id].index, bg=box['color'])
+
+    def delete_unused_boxes(self):
+        # now delete the boxes that are no longer needed
+        boxes_to_delete = []
+        for id in self.boxes.keys():
+            if id not in self.curr.instances:
+                boxes_to_delete.append(id)
+                self.cvs_image.delete(self.boxes[id])
+                self.list_ids.itemconfig(self.allInstances[id].index, bg=self.col_light)
+        for id in boxes_to_delete:
+            del self.boxes[id]
+
     def loadNewFrame(self):
         # new image
         if self.displayedImage is None:
@@ -1003,25 +1057,23 @@ class Annotator():
         self.lbl_frameNum.config(text="Frame Number: " + str(self.curr.frameNum))
         shiftBar(self, self.curr.frameNum)
 
-        # reset elements
-        for id in self.boxes.keys():
-            self.cvs_image.delete(self.boxes[id])
-            self.list_ids.itemconfig(self.allInstances[id].index, bg=self.col_light)
-        self.boxes = {}
+        # delete the boxes that are no longer needed
+        self.delete_unused_boxes()
 
         # new boxes
         box = None
         removeInstances = []
-        for id in self.curr.instances.keys():
+        for id, box in self.curr.instances.items():
             if id in self.idsHaveChanged:
                 if self.allInstances[id].boxes.get(self.curr.frameNum) is not None:
                     self.curr.addInstance(id, self.allInstances[id].boxes[self.curr.frameNum])
                 else:
                     removeInstances.append(id)
                     continue
-            box = self.curr.instances[id]
-            self.boxes[id] = self.cvs_image.create_rectangle(box['x1'], box['y1'], box['x2'], box['y2'], outline=str(box['color']), width=3)
-            self.list_ids.itemconfig(self.allInstances[id].index, bg=box['color'])
+
+            # update boxes and list_ids color
+            self.pool.apply_async(self.update_box, (id, box))
+            
         for id in removeInstances:
             self.curr.removeInstance(id)
 
