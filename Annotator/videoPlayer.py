@@ -13,6 +13,7 @@ from Annotator.barId import barId
 
 def openVideo(self):
     self.video = cv2.VideoCapture(self.videoFileName)
+    self.bkdVideo = cv2.VideoCapture(self.videoFileName)
     setDimsAndMultipliers(self)
     self.lbl_fileLoaded.config(text=f"  File: {self.videoFileName.split('/')[-1]} ({self.vid_length})")
     self.lbl_fileFrames.config(text=f"  Total frames: {int(self.vid_totalFrames)}")
@@ -225,7 +226,7 @@ def checkThread(self):
                 self.tail += 1
 
         # PREV CLICK
-        if num - self.tail <= self.reloadBound and self.tail > 0: # self.tail != 0
+        if num - self.tail <= self.reloadBound and self.tail > 1: # self.tail != 0
             if self.bkdStop:
                 #bkdReload(self, max(0, int(self.tail - self.bkdSize)), int(self.tail))
                 bkdReload(self, max(0, int(num - self.bkdSize)), int(self.tail))
@@ -251,16 +252,15 @@ def fwdReload(self, start=0, stop=0):
 def bkdReload(self, start=0, stop=0):
     self.bkdStop = False
     #video = cv2.VideoCapture(self.videoFileName)
-    count = start
+    count = max(1, start)
     if not self.bkdStop:
-        self.video.set(1, start - 1)
-        while count < stop:
-            more, freeze = self.video.read()
-            #print("Backward: frame read at: {}".format(self.video.get(1)))
+        self.bkdVideo.set(1, start-1)
+        while count <= stop:
+            more, freeze = self.bkdVideo.read()
             self.img = frameToImage(self, freeze)
             self.frames[count].img = self.img
             self.loadNewBoxes(count)
             count += 1
         self.bkdStop = True
-        self.tail = start
+        self.tail = max(1, start)
         shiftHeadTail(self, self.curr.frameNum)
