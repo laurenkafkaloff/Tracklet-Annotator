@@ -22,7 +22,10 @@ from Annotator.barId import barId
 from multiprocessing.pool import ThreadPool
 
 class Annotator():
-    # TODO: Set frame number, set playing speed
+
+    # You can get the timing of each component using:
+    #   python -m cProfile -s 'cumtime' -m Annotator
+
 
     def __init__(self):
 
@@ -330,7 +333,7 @@ class Annotator():
         if self.checker is not None:
             self.stopChecker = True
         
-        self.video.set(1, max(frame-1, 0))
+        self.video.set(1, max(frame, 0))
 
         # case for sudden jump to distant frame past annotated region (need to build up self.frames to that point)
         if frame > len(self.frames):
@@ -863,11 +866,11 @@ class Annotator():
 
     # DISPLAY
     def leftkey(self, event):
-        if self.curr.frameNum - self.tail > int(self.bkdSize/4):
+        if self.curr.frameNum - self.tail > int(self.bkdSize/4) or self.tail <= 1:
             self.prev()
 
     def rightkey(self, event):
-        if self.head - self.curr.frameNum > int(self.fwdSize/2):
+        if self.head - self.curr.frameNum > int(self.fwdSize/2) or self.head == self.vid_totalFrames:
             self.next()
 
     def space(self, event):
