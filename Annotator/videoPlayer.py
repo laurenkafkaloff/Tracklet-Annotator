@@ -33,10 +33,17 @@ def setDimsAndMultipliers(self):
     # set dimensions
     self.ori_height = self.video.get(cv2.CAP_PROP_FRAME_HEIGHT)
     self.ori_width = self.video.get(cv2.CAP_PROP_FRAME_WIDTH)
-    self.img_height = int(self.img_width / self.ori_width * self.ori_height)
-    self.cvs_image.config(width=self.width, height=self.img_height)
-    self.canvas.config(width=self.width, height=self.img_height + self.dialog_height + self.border)
-    self.height = max(770, self.img_height + self.dialog_height + self.playBar_height + self.border + 60)
+    self.width = self.window.winfo_width()
+    self.height = self.window.winfo_height()
+    temp_width = self.width - self.leftPanelWidth - self.border
+    temp_height = self.height - self.dialog_height - self.playBar_height - self.border - 80
+    wscale = temp_width / self.ori_width
+    hscale = temp_height / self.ori_height
+    self.scale = min(wscale, hscale)
+    self.img_width = int(self.scale * self.ori_width)
+    self.img_height = int(self.scale * self.ori_height)
+    self.cvs_image.config(width=self.img_width, height=self.img_height)
+    self.canvas.config(width=self.width, height=self.height)
     self.window.minsize(self.width, self.height)
     self.window.geometry(f"{self.width}x{self.height}")
 
@@ -75,7 +82,7 @@ def getFrame(self, time):
     
 
 def makePlayBar(self):
-    self.play_w = self.cvs_image.winfo_width()  # 1090
+    self.play_w = self.img_width  # 1090
     self.play_h = self.playBar_height / 2 + 15 / 2 - 10
     self.play_total_frames_on_bar = 100
     self.play_x = self.play_w / self.play_total_frames_on_bar
