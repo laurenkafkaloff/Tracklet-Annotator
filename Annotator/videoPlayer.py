@@ -13,6 +13,7 @@ from Annotator.barId import barId
 
 def openVideo(self):
     self.video = cv2.VideoCapture(self.videoFileName)
+    self.bkdVideo = cv2.VideoCapture(self.videoFileName)
     setDimsAndMultipliers(self)
     self.lbl_fileLoaded.config(text=f"  File: {self.videoFileName.split('/')[-1]} ({self.vid_length})")
     self.lbl_fileFrames.config(text=f"  Total frames: {int(self.vid_totalFrames)}")
@@ -32,10 +33,17 @@ def setDimsAndMultipliers(self):
     # set dimensions
     self.ori_height = self.video.get(cv2.CAP_PROP_FRAME_HEIGHT)
     self.ori_width = self.video.get(cv2.CAP_PROP_FRAME_WIDTH)
-    self.img_height = int(self.img_width / self.ori_width * self.ori_height)
-    self.cvs_image.config(width=self.width, height=self.img_height)
-    self.canvas.config(width=self.width, height=self.img_height + self.dialog_height + self.border)
-    self.height = max(770, self.img_height + self.dialog_height + self.playBar_height + self.border + 60)
+    self.width = self.window.winfo_width()
+    self.height = self.window.winfo_height()
+    temp_width = self.width - self.leftPanelWidth - self.border
+    temp_height = self.height - self.dialog_height - self.playBar_height - self.border - 80
+    wscale = temp_width / self.ori_width
+    hscale = temp_height / self.ori_height
+    self.scale = min(wscale, hscale)
+    self.img_width = int(self.scale * self.ori_width)
+    self.img_height = int(self.scale * self.ori_height)
+    self.cvs_image.config(width=self.img_width, height=self.img_height)
+    self.canvas.config(width=self.width, height=self.height)
     self.window.minsize(self.width, self.height)
     self.window.geometry(f"{self.width}x{self.height}")
 
@@ -74,7 +82,7 @@ def getFrame(self, time):
     
 
 def makePlayBar(self):
-    self.play_w = self.cvs_image.winfo_width()  # 1090
+    self.play_w = self.img_width  # 1090
     self.play_h = self.playBar_height / 2 + 15 / 2 - 10
     self.play_total_frames_on_bar = 100
     self.play_x = self.play_w / self.play_total_frames_on_bar
@@ -225,7 +233,7 @@ def checkThread(self):
                 self.tail += 1
 
         # PREV CLICK
-        if num - self.tail <= self.reloadBound and self.tail > 0: # self.tail != 0
+        if num - self.tail <= self.reloadBound and self.tail > 1: # self.tail != 0
             if self.bkdStop:
                 #bkdReload(self, max(0, int(self.tail - self.bkdSize)), int(self.tail))
                 bkdReload(self, max(0, int(num - self.bkdSize)), int(self.tail))
@@ -251,16 +259,15 @@ def fwdReload(self, start=0, stop=0):
 def bkdReload(self, start=0, stop=0):
     self.bkdStop = False
     #video = cv2.VideoCapture(self.videoFileName)
-    count = start
+    count = max(1, start)
     if not self.bkdStop:
-        self.video.set(1, start - 1)
-        while count < stop:
-            more, freeze = self.video.read()
-            #print("Backward: frame read at: {}".format(self.video.get(1)))
+        self.bkdVideo.set(1, start-1)
+        while count <= stop:
+            more, freeze = self.bkdVideo.read()
             self.img = frameToImage(self, freeze)
             self.frames[count].img = self.img
             self.loadNewBoxes(count)
             count += 1
         self.bkdStop = True
-        self.tail = start
+        self.tail = max(1, start)
         shiftHeadTail(self, self.curr.frameNum)

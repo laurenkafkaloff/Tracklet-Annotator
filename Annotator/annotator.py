@@ -22,7 +22,10 @@ from Annotator.barId import barId
 from multiprocessing.pool import ThreadPool
 
 class Annotator():
-    # TODO: Set frame number, set playing speed
+
+    # You can get the timing of each component using:
+    #   python -m cProfile -s 'cumtime' -m Annotator
+
 
     def __init__(self):
 
@@ -31,7 +34,7 @@ class Annotator():
 
         # Instance Variables
         # DISPLAY
-        self.width, self.height = 1440, 1155 #960, 770
+        #self.width, self.height = 1920, 1080 #2160, 1340 # uncomment to set window manually
         self.border = 10
         self.dialog_height, self.dialog_width = 45, 600
         self.playBar_height = 55
@@ -61,10 +64,10 @@ class Annotator():
         self.window = Tk()
         self.window.title("Tracklet Annotator")
         self.window.wm_protocol("WM_DELETE_WINDOW", self.onClose)
-        #self.width = self.window.winfo_screenwidth() - 150 # uncomment to set window dimensions automatically
-        #self.height = self.window.winfo_screenheight() - 150 # uncomment to set window dimensions automatically
+        if not hasattr(self,'width'):
+            self.width = self.window.winfo_screenwidth() - 150 # uncomment to set window dimensions automatically
+            self.height = self.window.winfo_screenheight() - 150 # uncomment to set window dimensions automatically
         self.img_width = self.width - self.leftPanelWidth - self.border
-        self.window.minsize(self.width, self.height)
         self.window.geometry(f"{self.width}x{self.height}")
 
         self.resetVariables()
@@ -308,7 +311,7 @@ class Annotator():
         frame = self.entryFrame.get()
         time = self.entryTime.get()
         if frame != self.curr.frameNum:
-            self.reload(frame)
+            self.reload(frame-1)
         elif time != getTime(self, self.curr.frameNum):
             try:
                 newframe = getFrame(self, time)
@@ -330,7 +333,7 @@ class Annotator():
         if self.checker is not None:
             self.stopChecker = True
         
-        self.video.set(1, max(frame-1, 0))
+        self.video.set(1, max(frame, 0))
 
         # case for sudden jump to distant frame past annotated region (need to build up self.frames to that point)
         if frame > len(self.frames):
@@ -863,11 +866,11 @@ class Annotator():
 
     # DISPLAY
     def leftkey(self, event):
-        if self.curr.frameNum - self.tail > int(self.bkdSize/4):
+        if self.curr.frameNum - self.tail > int(self.bkdSize/4) or self.tail <= 1:
             self.prev()
 
     def rightkey(self, event):
-        if self.head - self.curr.frameNum > int(self.fwdSize/2):
+        if self.head - self.curr.frameNum > int(self.fwdSize/2) or self.head == self.vid_totalFrames:
             self.next()
 
     def space(self, event):
@@ -993,6 +996,14 @@ class Annotator():
                     # add frame if it doesn't exist yet
                     if a_frame == len(self.frames):
                         self.frames.append(Frame(frameNum=a_frame))
+
+                    # add frames up to the first entry in the file
+                    if a_frame > len(self.frames):
+                        tempnum = self.frames[-1].frameNum + 1
+                        while tempnum <= a_frame:
+                            self.f = Frame(frameNum=tempnum, img=None)
+                            self.frames.append(self.f)
+                            tempnum += 1
 
                     # account for image resizing
                     x1 = float(textArray[box_index]) * self.boxMult
