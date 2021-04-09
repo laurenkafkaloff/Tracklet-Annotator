@@ -134,3 +134,36 @@ AFTER                              AFTER                           AFTER
 Considering the program currently has no undo button, it is recommended to commit edits frequently to preserve work. For the sake of version control, the original tracking file is left untouched in the main directory, and each editing session is stored chronologically in the "Edited Versions" folder. The program automatically opens the most recent version, so to rid of a session's edits, simply remove the file.
 
 As a safeguard, if the window is closed while there are unsaved changes, the program will automatically create a restored file named "[video-file-name]\_restored\_-1". If this were to occur, upon reopening the video, the user will be prompted to either open the restored file or the most recently saved one. The restored file will be deleted as soon as any edits are committed.
+
+## How to contribute
+Go to https://github.com/laurenkafkaloff/Tracklet-Annotator and fork this repository.
+
+Copy the url of your fork and in a terminal on your machine run
+```git clone https://github.com/<your_user>/Tracklet-Annotator.git```
+
+Add the upstream repository so that you can pull changes that happen while you are working on your update
+```git remote add upstream https://github.com/laurenkafkaloff/Tracklet-Annotator.git```
+
+Make a new local branch. I am calling mine `how-to-contribute`
+```git checkout -b <your-branch-name-here>```
+
+Make your updates to the code. You can break down your changes into several sub-tasks that make sense to you. You can type `git status` to show which files have been modified or added.  To add a new file run `git add <filename>` and you will see a new file under "Changes to be committed:". You should continue making changes and "adding" until everything is working for current sub-task you are trying to implement. It is ok if your sub-task update broke something that you plan to fix with a later sub-task, but this step is where you should catch random bugs like off-by-one errors, typos, etc. If your sub-task is ready, you can commit it to the local working branch.
+
+To commit your changes to your local working branch run
+```git commit -m "implement zoom function"```
+
+Later, you might have another sub-task to commit
+```git commit -m "update box positions to move with zoom"```
+
+After your update is complete, add new GUI tests so we will know if a future change breaks your feature and **go through all existing GUI tests** to make sure your new feature is working and hasn't broken something else. Finally, you can pull any changes that occurred on the upstream main branch into the local version of the upstream main branch, and then "rebase" your new feature branch on those changes (this makes it look like you just did the fork).
+```bash
+git pull upstream <main/master>
+git rebase upstream/<main/master>
+```
+
+Push your new branch to the remote version of your/our repo
+```git push -u origin <your-branch-name-here>```
+
+Now go online and create a pull request from ```<your-branch-name-here>``` to ```base:<multi-view>```!
+
+
