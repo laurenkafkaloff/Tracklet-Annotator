@@ -139,29 +139,36 @@ As a safeguard, if the window is closed while there are unsaved changes, the pro
 Go to https://github.com/laurenkafkaloff/Tracklet-Annotator and fork this repository.
 
 Copy the url of your fork and in a terminal on your machine run
+
 ```git clone https://github.com/<your_user>/Tracklet-Annotator.git```
 
 Add the upstream repository so that you can pull changes that happen while you are working on your update
+
 ```git remote add upstream https://github.com/laurenkafkaloff/Tracklet-Annotator.git```
 
 Make a new local branch from the ```remote/multi-view``` branch. I am calling mine `how-to-contribute`
+
 ```git checkout -b <your-branch-name-here> origin/multi-view```
 
 Make your updates to the code. You can break down your changes into several sub-tasks that make sense to you. You can type `git status` to show which files have been modified or added.  To add a new file run `git add <filename>` and you will see a new file under "Changes to be committed:". You should continue making changes and "adding" until everything is working for current sub-task you are trying to implement. It is ok if your sub-task update broke something that you plan to fix with a later sub-task, but this step is where you should catch random bugs like off-by-one errors, typos, etc. If your sub-task is ready, you can commit it to the local working branch.
 
 To commit your changes to your local working branch run
+
 ```git commit -m "implement zoom function"```
 
 Later, you might have another sub-task to commit
+
 ```git commit -m "update box positions to move with zoom"```
 
 After your update is complete, add new GUI tests so we will know if a future change breaks your feature and **go through all existing GUI tests** to make sure your new feature is working and hasn't broken something else. Finally, you can pull any changes that occurred on the upstream main branch into the local version of the upstream main branch, and then "rebase" your new feature branch on those changes (this makes it look like you just did the fork).
+
 ```bash
 git pull upstream <main/master>
 git rebase upstream/<main/master>
 ```
 
 Push your new branch to the remote version of your/our repo
+
 ```git push -u origin <your-branch-name-here>```
 
 Now go online and create a pull request from ```<your-branch-name-here>``` to ```base:<multi-view>```!
