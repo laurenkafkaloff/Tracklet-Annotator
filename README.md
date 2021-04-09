@@ -144,8 +144,8 @@ Copy the url of your fork and in a terminal on your machine run
 Add the upstream repository so that you can pull changes that happen while you are working on your update
 ```git remote add upstream https://github.com/laurenkafkaloff/Tracklet-Annotator.git```
 
-Make a new local branch. I am calling mine `how-to-contribute`
-```git checkout -b <your-branch-name-here>```
+Make a new local branch from the ```remote/multi-view``` branch. I am calling mine `how-to-contribute`
+```git checkout -b <your-branch-name-here> origin/multi-view```
 
 Make your updates to the code. You can break down your changes into several sub-tasks that make sense to you. You can type `git status` to show which files have been modified or added.  To add a new file run `git add <filename>` and you will see a new file under "Changes to be committed:". You should continue making changes and "adding" until everything is working for current sub-task you are trying to implement. It is ok if your sub-task update broke something that you plan to fix with a later sub-task, but this step is where you should catch random bugs like off-by-one errors, typos, etc. If your sub-task is ready, you can commit it to the local working branch.
 
