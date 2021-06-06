@@ -278,6 +278,23 @@ class Annotator():
         self.openingVideo = False
 
 # EDITOR MODE
+
+    def secondForeward(self, event):
+        frame = self.curr.frameNum+40
+        self.reload(frame-1)
+     #skip forward 2400 frames
+    def minuteForeward(self, event):
+        frame = self.curr.frameNum+2400
+        self.reload(frame-1)
+     #skip backward 40 frames
+    def secondBackward(self, event):
+        frame = self.curr.frameNum-40
+        self.reload(frame-1)
+     #skip backward 2400 frames
+    def minuteBackward(self, event):
+        frame = self.curr.frameNum-2400
+        self.reload(frame-1)
+
     def setTime(self):
         self.topLevelOpen = True
         self.win = Toplevel()
